@@ -1,0 +1,28 @@
+description: Fetch articles with order by author's contact phone with wrong order_by type
+url: /v1alpha1/graphql
+status: 400
+response:
+  errors:
+  - code: validation-failed
+    path: $.selectionSet.article.args.order_by[0].author.contact.phone
+    error: |- 
+      unexpected value "notfound" for enum: 'order_by'
+query:
+  query: |
+    query {
+      article(
+      order_by: {author: {contact: {phone: notfound}}}
+      ){
+        id
+        title
+        content
+        author {
+          id
+          name
+          contact {
+            id
+            phone
+          }
+        }
+      }
+    }

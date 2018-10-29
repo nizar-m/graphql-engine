@@ -241,6 +241,13 @@ class TestGraphQLQueryBoolExpJsonB(DefaultTestSelectQueries):
 
 
 class TestGraphQLQueryOrderBy(DefaultTestSelectQueries):
+
+    def test_articles_unexpected_order_type_err(self, hge_ctx):
+        check_query_f(hge_ctx, self.dir() + '/articles_unexpected_order_type_err.yaml')
+
+    def test_articles_order_by_col_not_present_err(self, hge_ctx):
+        check_query_f(hge_ctx, self.dir() + '/articles_order_by_col_not_present_err.yaml')
+
     def test_articles_order_by_without_id(self, hge_ctx):
         check_query_f(hge_ctx, self.dir() + '/articles_order_by_without_id.yaml')
 
@@ -249,6 +256,9 @@ class TestGraphQLQueryOrderBy(DefaultTestSelectQueries):
 
     def test_articles_order_by_rel_author_rel_contact_phone(self, hge_ctx):
         check_query_f(hge_ctx, self.dir() + '/articles_order_by_rel_author_rel_contact_phone.yaml')
+
+    def test_articles_order_by_rel_unexpected_order_type_err(self, hge_ctx):
+        check_query_f(hge_ctx, self.dir() + '/articles_order_by_rel_unexpected_order_type_err.yaml')
 
     @classmethod
     def dir(cls):
