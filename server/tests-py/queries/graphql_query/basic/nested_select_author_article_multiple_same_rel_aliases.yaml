@@ -1,0 +1,49 @@
+description: Select author and their articles with multiple aliases into same realationship
+url: /v1alpha1/graphql
+status: 200
+response:
+  data:
+    author:
+    - id: 1
+      name: Author 1
+      article_id_2:
+      - title: Article 2
+        content: Sample article content 2
+        id: 2
+      articles_ordered_by_id_asc:
+      - title: Article 1
+        content: Sample article content 1
+        id: 1
+      - title: Article 2
+        content: Sample article content 2
+        id: 2
+      articles_ordered_by_title_desc:
+      - title: Article 2
+        content: Sample article content 2
+        id: 2
+      - title: Article 1
+        content: Sample article content 1
+        id: 1
+query:
+  query: |
+    query {
+      author (where: {name: {_eq: "Author 1"}}) {
+        id
+        name
+        article_id_2: articles (where: {id : { _eq: 2}})  {
+          id
+          title
+          content
+        }
+        articles_ordered_by_id_asc: articles (order_by: { id: asc }) {
+          id
+          title
+          content
+        }
+        articles_ordered_by_title_desc: articles (order_by: { title: desc }) {
+          id
+          title
+          content
+        }
+      }
+    }

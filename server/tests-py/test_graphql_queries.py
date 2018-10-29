@@ -23,6 +23,10 @@ class TestGraphQLQueryBasic(DefaultTestSelectQueries):
     def test_nested_select_query_article_author(self, hge_ctx):
         check_query_f(hge_ctx, self.dir() + '/nested_select_query_article_author.yaml')
 
+    def test_select_article_author_multiple_same_rel_aliases(self, hge_ctx):
+        """Test for https://github.com/hasura/graphql-engine/issues/278"""
+        check_query_f(hge_ctx, self.dir() + '/nested_select_author_article_multiple_same_rel_aliases.yaml')
+
     def test_nested_select_query_deep(self, hge_ctx):
         check_query_f(hge_ctx, self.dir() + '/nested_select_query_deep.yaml')
 
