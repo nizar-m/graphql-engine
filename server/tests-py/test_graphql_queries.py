@@ -30,6 +30,24 @@ class TestGraphQLQueryBasic(DefaultTestSelectQueries):
     def test_nested_select_query_deep(self, hge_ctx):
         check_query_f(hge_ctx, self.dir() + '/nested_select_query_deep.yaml')
 
+    def test_nested_same_table_select_level_3(self, hge_ctx):
+        check_query_f(hge_ctx, self.dir() + '/nested_same_table_select_level_3.yaml')
+
+    def test_nested_same_table_select_level_5(self, hge_ctx):
+        check_query_f(hge_ctx, self.dir() + '/nested_same_table_select_level_5.yaml')
+
+    def test_nested_same_table_select_level_7(self, hge_ctx):
+        check_query_f(hge_ctx, self.dir() + '/nested_same_table_select_level_7.yaml')
+
+    def test_nested_same_table_select_level_9(self, hge_ctx):
+        check_query_f(hge_ctx, self.dir() + '/nested_same_table_select_level_9.yaml')
+
+    def test_nested_same_table_select_level_11(self, hge_ctx):
+        check_query_f(hge_ctx, self.dir() + '/nested_same_table_select_level_11.yaml')
+
+    def test_nested_same_table_select_level_13(self, hge_ctx):
+        check_query_f(hge_ctx, self.dir() + '/nested_same_table_select_level_13.yaml')
+
     def test_nested_select_query_where(self, hge_ctx):
         check_query_f(hge_ctx, self.dir() + '/nested_select_where_query_author_article.yaml')
 

@@ -18,6 +18,7 @@ args:
           price           numeric
       );
 
+
 #Test table with different types
 - type: run_sql
   args:
@@ -73,6 +74,19 @@ args:
     schema: public
     name: test_types
 
+- type: run_sql
+  args:
+    sql: |
+      create table linked_list (
+          id integer primary key,
+          data text,
+          next_id integer,
+          foreign key (next_id) references linked_list(id)
+      )
+- type: track_table
+  args:
+    schema: public
+    name: linked_list
 
 #Author table
 - type: run_sql
@@ -276,3 +290,88 @@ args:
   args:
     sql: |
       SET TIME ZONE 'UTC';
+
+#Create linked_list object relationship
+- type: create_object_relationship
+  args:
+    name: next
+    table: linked_list
+    using:
+      foreign_key_constraint_on: next_id
+
+#Insert linked_list values
+- type: run_sql
+  args:
+    sql: |
+      insert into linked_list (id,data,next_id)
+      values
+      (
+        31,
+        'Postgres',
+        null
+      ),
+      (
+        21,
+        'over',
+        31
+      ),
+      (
+        11,
+        'APIs',
+        21
+      ),
+      (
+        1,
+        'GraphQL',
+        11
+      ),
+      (
+        90,
+        'realtime',
+        1
+      ),
+      (
+        80,
+        'instant',
+        90
+      ),
+      (
+        70,
+        'you',
+        80
+      ),
+      (
+        60,
+        'gives',
+        70
+      ),
+      (
+        50,
+        'that',
+        60
+      ),
+      (
+        40,
+        'server',
+        50
+      ),
+      (
+        30,
+        'GraphQL',
+        40
+      ),
+      (
+        20,
+        'fast',
+        30
+      ),
+      (
+        10,
+        'Blazing',
+        20
+      ),
+      (
+        5,
+        'Hasura',
+        10
+      )

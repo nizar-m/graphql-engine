@@ -1,0 +1,39 @@
+description: Nested select on linked_list 5 levels deep
+url: /v1alpha1/graphql
+status: 200
+response:
+  data:
+   linked_list:
+   - data: instant
+     next:
+       data: realtime
+       next:
+         data: GraphQL
+         next:
+           data: APIs
+           next:
+             data: over
+             next:
+               data: Postgres
+query:
+  query: |
+    query {
+      linked_list(where: {id: {_eq: 80}}) {
+        data
+        next {
+          data
+          next {
+            data
+            next {
+              data
+              next {
+                data
+                next {
+                  data
+                }
+              }
+            }
+          }
+        }
+      }
+    }
