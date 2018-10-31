@@ -124,6 +124,7 @@ def check_query(hge_ctx, conf, add_auth=True):
     assert code == conf['status'], resp
     if 'response' in conf:
         assert json_ordered(resp) == json_ordered(conf['response']) , yaml.dump( {
+            'query' : conf['query'],
             'response' : resp,
             'expected' : conf['response'],
             'diff': jsondiff.diff(conf['response'], resp)
