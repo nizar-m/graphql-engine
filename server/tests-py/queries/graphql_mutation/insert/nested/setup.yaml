@@ -48,3 +48,25 @@ args:
       foreign_key_constraint_on:
         table: article
         column: author_id
+
+- type: run_sql
+  args:
+    sql: |
+      create table linked_list (
+          id serial primary key,
+          word text,
+          next_id integer,
+          foreign key (next_id) references linked_list(id)
+      )
+- type: track_table
+  args:
+    schema: public
+    name: linked_list
+
+#Create linked_list object relationship
+- type: create_object_relationship
+  args:
+    name: next
+    table: linked_list
+    using:
+      foreign_key_constraint_on: next_id

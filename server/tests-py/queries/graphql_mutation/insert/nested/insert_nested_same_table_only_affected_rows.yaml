@@ -1,0 +1,70 @@
+- description: Insert linked_list using deep nested mutation which is 3 levels down
+  url: /v1alpha1/graphql
+  status: 200
+  response:
+    data:
+      insert_linked_list:
+        affected_rows: 4
+  query:
+    query: |
+      mutation insertLinkedList {
+        insert_linked_list(objects: [
+          {
+            word: "Instant",
+            next: {
+              data: {
+                word: "Realtime",
+                next: {
+                  data: {
+                    word: "GraphQL"
+                    next: {
+                      data: {
+                        word: "APIs"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]) {
+          affected_rows
+        }
+      }
+- description: Check whether actual insert did happen
+  url: /v1alpha1/graphql
+  status: 200
+  response:
+    data:
+      linked_list:
+        - id: 4
+          word: Instant
+          next:
+            id: 3
+            word: Realtime
+            next:
+              id: 2
+              word: GraphQL
+              next:
+                id: 1
+                word: APIs
+  query:
+    query: |
+      query getLinkedList {
+        linked_list (where : { id : { _eq: 4}  } ) {
+          id
+          word
+          next {
+            id
+            word
+            next {
+              id
+              word
+              next {
+                id
+                word
+              }
+            }
+          }
+        }
+      }

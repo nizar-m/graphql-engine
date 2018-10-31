@@ -1,0 +1,215 @@
+- description: Insert linked_list using deep nested mutation which is 7 levels down
+  url: /v1alpha1/graphql
+  status: 200
+  response:
+    data:
+      insert_linked_list:
+        affected_rows: 12
+        returning: &linked_list
+        - id: 12
+          word: fast
+          next:
+            id: 11
+            word: GraphQL
+            next:
+              id: 10
+              word: server
+              next:
+                id: 9
+                word: that
+                next:
+                  id: 8
+                  word: gives
+                  next:
+                    id: 7
+                    word: you
+                    next:
+                      id: 6
+                      word: Instant
+                      next:
+                        id: 5
+                        word: Realtime
+                        next:
+                          id: 4
+                          word: GraphQL
+                          next:
+                            id: 3
+                            word: APIs
+                            next:
+                              id: 2
+                              word: over
+                              next:
+                                id: 1
+                                word: Postgres
+  query:
+    query: |
+      mutation insertLinkedList {
+        insert_linked_list(objects: [
+          {
+            word: "fast",
+            next: {
+              data : {
+                word: "GraphQL",
+                next: {
+                  data: {
+                    word: "server",
+                    next: {
+                      data: {
+                        word: "that",
+                        next: {
+                          data: {
+                            word: "gives",
+                            next: {
+                              data: {
+                                word: "you"
+                                next: {
+                                  data: {
+                                    word: "Instant",
+                                    next: {
+                                      data: {
+                                        word: "Realtime",
+                                        next: {
+                                          data: {
+                                            word: "GraphQL"
+                                            next: {
+                                              data: {
+                                                word: "APIs"
+                                                next: {
+                                                  data: {
+                                                    word: "over"
+                                                    next: {
+                                                      data: {
+                                                        word: "Postgres"
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]) {
+          affected_rows
+          returning {
+            id
+            word
+            next {
+              id
+              word
+              next {
+                id
+                word
+                next {
+                  id
+                  word
+                  next {
+                    id
+                    word
+                    next {
+                      id
+                      word
+                      next {
+                        id
+                        word
+                        next {
+                          id
+                          word
+                          next {
+                            id
+                            word
+                            next {
+                              id
+                              word
+                              next {
+                                id
+                                word
+                                next {
+                                  id
+                                  word
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+- description: Check whether actual insert did happen
+  url: /v1alpha1/graphql
+  status: 200
+  response:
+    data:
+      linked_list: *linked_list
+  query:
+    query: |
+      query getLinkedList {
+        linked_list (where : { id : { _eq: 12}  } ) {
+          id
+          word
+          next {
+            id
+            word
+            next {
+              id
+              word
+              next {
+                id
+                word
+                next {
+                  id
+                  word
+                  next {
+                    id
+                    word
+                    next {
+                      id
+                      word
+                      next {
+                        id
+                        word
+                        next {
+                          id
+                          word
+                          next {
+                            id
+                            word
+                            next {
+                              id
+                              word
+                              next {
+                                id
+                                word
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
