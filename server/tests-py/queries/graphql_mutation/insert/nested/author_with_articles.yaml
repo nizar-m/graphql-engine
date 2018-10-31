@@ -1,60 +1,71 @@
-description: Insert author and it's articles via nested mutation
-url: /v1alpha1/graphql
-status: 200
-query:
-  query: |
-   mutation nested_author_insert {
-      insert_author(
-        objects: [
-          {
-            id: 1,
-            name: "Author 1", 
-            articles: {
-              data: [
-                {
-                  id: 1,
-                  title: "Article 1 by Author 1", 
-                  content: "Content for Article 1 by Author 1", 
-                  is_published: false
-                },
-                {
-                  id: 2,
-                  title: "Article 2 by Author 1", 
-                  content: "Content for Article 2 by Author 1", 
-                  is_published: false
-                }
-              ]
+- description: Insert author and it's articles via nested mutation
+  url: /v1alpha1/graphql
+  status: 200
+  query:
+    query: |
+     mutation nested_author_insert {
+        insert_author(
+          objects: [
+            {
+              id: 1,
+              name: "Author 1",
+              articles: {
+                data: [
+                  {
+                    id: 1,
+                    title: "Article 1 by Author 1",
+                    content: "Content for Article 1 by Author 1",
+                    is_published: false
+                  },
+                  {
+                    id: 2,
+                    title: "Article 2 by Author 1",
+                    content: "Content for Article 2 by Author 1",
+                    is_published: false
+                  }
+                ]
+              }
+            }
+          ]
+        ) {
+          affected_rows
+          returning {
+            id
+            name
+            articles {
+              id
+              title
+              content
+              is_published
             }
           }
-        ]
-      ) {
-        affected_rows
-        returning {
-          id
-          name
-          articles {
-            id
-            title
-            content
-            is_published
-          }
         }
-      }
-   }
+     }
 
-response:
-  data:
-    insert_author:
-      affected_rows: 3
-      returning:
-      - id: 1
-        name: Author 1
-        articles:
+  response:
+    data:
+      insert_author:
+        affected_rows: 3
+        returning:
         - id: 1
-          title: "Article 1 by Author 1"
-          content: "Content for Article 1 by Author 1"
-          is_published: false
-        - id: 2
-          title: "Article 2 by Author 1"
-          content: "Content for Article 2 by Author 1"
-          is_published: false
+          name: Author 1
+          articles:
+          - id: 1
+            title: "Article 1 by Author 1"
+            content: "Content for Article 1 by Author 1"
+            is_published: false
+          - id: 2
+            title: "Article 2 by Author 1"
+            content: "Content for Article 2 by Author 1"
+            is_published: false
+- description: Delete the inserted articles and authors
+  url: /v1/query
+  status: 200
+  query:
+    type: run_sql
+    args:
+      sql: |
+        delete from article;
+        delete from author;
+        SELECT setval('article_id_seq', 1, FALSE);
+        SELECT setval('author_id_seq', 1, FALSE);

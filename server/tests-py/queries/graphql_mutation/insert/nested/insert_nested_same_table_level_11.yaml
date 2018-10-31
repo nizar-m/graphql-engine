@@ -213,3 +213,12 @@
           }
         }
       }
+- description: Delete the inserted values
+  url: /v1/query
+  status: 200
+  query:
+    type: run_sql
+    args:
+      sql: |
+        delete from linked_list;
+        SELECT setval('linked_list_id_seq', 1, FALSE);

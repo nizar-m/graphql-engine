@@ -193,25 +193,26 @@ class TestGraphqlNestedInserts(DefaultTestQueries):
 
     def test_author_with_articles(self, hge_ctx):
         check_query_f(hge_ctx, self.dir() + "/author_with_articles.yaml")
-
-    @pytest.mark.xfail(reason="Refer https://github.com/hasura/graphql-engine/issues/844")
-    def test_same_table_nested_only_affected_rows(self, hge_ctx):
-        check_query_f(hge_ctx, self.dir() + "/insert_nested_same_table_only_affected_rows.yaml")
+        hge_ctx.may_skip_test_teardown = True
 
     def test_same_table_nested_level_3(self, hge_ctx):
         check_query_f(hge_ctx, self.dir() + "/insert_nested_same_table_level_3.yaml")
+        hge_ctx.may_skip_test_teardown = True
 
     def test_same_table_nested_level_7(self, hge_ctx):
         check_query_f(hge_ctx, self.dir() + "/insert_nested_same_table_level_7.yaml")
+        hge_ctx.may_skip_test_teardown = True
 
     def test_same_table_nested_level_11(self, hge_ctx):
         check_query_f(hge_ctx, self.dir() + "/insert_nested_same_table_level_11.yaml")
+        hge_ctx.may_skip_test_teardown = True
 
     def test_author_with_articles_author_id_fail(self, hge_ctx):
         check_query_f(hge_ctx, self.dir() + "/author_with_articles_author_id_fail.yaml")
 
     def test_articles_with_author(self, hge_ctx):
         check_query_f(hge_ctx, self.dir() + "/articles_with_author.yaml")
+        hge_ctx.may_skip_test_teardown = True
 
     def test_articles_with_author_author_id_fail(self, hge_ctx):
         check_query_f(hge_ctx, self.dir() + "/articles_with_author_author_id_fail.yaml")
@@ -221,6 +222,11 @@ class TestGraphqlNestedInserts(DefaultTestQueries):
 
     def test_articles_author_upsert_fail(self, hge_ctx):
         check_query_f(hge_ctx, self.dir() + "/articles_author_upsert_fail.yaml")
+
+    @pytest.mark.xfail(reason="Refer https://github.com/hasura/graphql-engine/issues/844")
+    def test_same_table_nested_only_affected_rows(self, hge_ctx):
+        check_query_f(hge_ctx, self.dir() + "/insert_nested_same_table_only_affected_rows.yaml")
+        hge_ctx.may_skip_test_teardown = True
 
     @classmethod
     def dir(cls):
