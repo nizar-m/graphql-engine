@@ -6,6 +6,12 @@ import yaml
 import time
 from validate import check_event
 
+if pytest.config.getoption("--hge-jwt-key-file"):
+    pytest.skip("Skipping event based tests when JWT auth is present", allow_module_level=True)
+
+if pytest.config.getoption("--hge-webhook"):
+    pytest.skip("Skipping event based tests when webhook is present", allow_module_level=True)
+
 def select_last_event_fromdb(hge_ctx):
     q = {
         "type": "select",
