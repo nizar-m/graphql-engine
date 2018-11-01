@@ -6,6 +6,7 @@ import os
 import base64
 import jsondiff
 import jwt
+import random
 
 def check_keys(keys, obj):
     for k in keys:
@@ -46,7 +47,7 @@ def check_event(hge_ctx, trig_name, table, operation, exp_ev_data, headers, webh
     assert ev['data'] == exp_ev_data, ev
 
 
-def test_forbidden_when_access_key_reqd(hge_ctx, conf):
+def test_forbidden_when_no_access_key(hge_ctx, conf):
     headers={}
     if 'headers' in conf:
         headers = conf['headers']
@@ -60,6 +61,11 @@ def test_forbidden_when_access_key_reqd(hge_ctx, conf):
             "response" : resp
             }
         } )
+
+def test_forbidden_incorrect_access_key(hge_ctx, conf):
+    headers={}
+    if 'headers' in conf:
+        headers = conf['headers']
 
     #Test with random access key
     headers['X-Hasura-Access-Key'] = base64.b64encode(os.urandom(30))
@@ -89,11 +95,21 @@ def check_query(hge_ctx, conf, add_auth=True):
     if 'headers' in conf:
         headers = conf['headers']
 
+    #Assume admin query if no headers are present in the configuration
+    isAdminQuery = len(headers) == 0
+
     if add_auth:
-        if hge_ctx.hge_jwt_key is not None and len(headers) > 0 and 'X-Hasura-Role' in headers:
+        #JWT auth mode
+        if hge_ctx.hge_jwt_key is not None:
             hClaims=dict()
-            hClaims['X-Hasura-Allowed-Roles']=[headers['X-Hasura-Role']]
-            hClaims['X-Hasura-Default-Role']=headers['X-Hasura-Role']
+            if not isAdminQuery and 'X-Hasura-Role' in headers:
+                hClaims['X-Hasura-Allowed-Roles']=[headers['X-Hasura-Role']]
+                hClaims['X-Hasura-Default-Role']=headers['X-Hasura-Role']
+            elif isAdminQuery:
+                test_forbidden_incorrect_access_key(hge_ctx, conf)
+                hClaims['X-Hasura-Allowed-Roles']=['admin']
+                hClaims['X-Hasura-Default-Role']='admin'
+
             for key in headers:
                 if key != 'X-Hasura-Role':
                     hClaims[key]=headers[key]
@@ -102,21 +118,42 @@ def check_query(hge_ctx, conf, add_auth=True):
                 "name": "bar",
                 "https://hasura.io/jwt/claims": hClaims
             }
-            headers['Authorization'] = 'Bearer ' + jwt.encode(claim, hge_ctx.hge_jwt_key, algorithm='RS512').decode('UTF-8')
+            if not isAdminQuery:
+                headers['Authorization'] = 'Bearer ' + jwt.encode(claim, hge_ctx.hge_jwt_key, algorithm='RS512').decode('UTF-8')
+            else:
+                #For admin query: randomly choose between webhook key mode and JWT auth mode
+                if random.choice([True, False]):
+                    headers['Authorization'] = 'Bearer ' + jwt.encode(claim, hge_ctx.hge_jwt_key, algorithm='RS512').decode('UTF-8')
+                else:
+                    headers = dict()
+                    headers['X-Hasura-Access-Key'] = hge_ctx.hge_key
 
-        if hge_ctx.hge_webhook is not None and len(headers) > 0:
+        #Webhook auth mode
+        if hge_ctx.hge_webhook is not None:
             if not hge_ctx.webhook_insecure:
                 test_forbidden_webhook(hge_ctx, conf)
             headers['X-Hasura-Auth-Mode'] = 'webhook'
+            if isAdminQuery:
+                test_forbidden_incorrect_access_key(hge_ctx, conf)
+                headers['X-Hasura-Role'] = 'admin'
+
+            print (headers)
             headers_new = dict()
             headers_new['Authorization'] =  'Bearer ' + base64.b64encode(json.dumps(headers).encode('utf-8')).decode('utf-8')
-            headers = headers_new
+            if not isAdminQuery:
+                headers = headers_new
+            else:
+                #For admin query: randomly choose between webhook auth mode and access key mode
+                if random.choice([True, False]):
+                    headers = headers_new
+                else:
+                    headers = dict()
+                    headers['X-Hasura-Access-Key'] = hge_ctx.hge_key
 
-        elif (hge_ctx.hge_webhook is not None or hge_ctx.hge_jwt_key is not None) and hge_ctx.hge_key is not None and len(headers) == 0:
-            headers['X-Hasura-Access-Key'] = hge_ctx.hge_key
-
+        #Access key only mode
         elif hge_ctx.hge_key is not None and hge_ctx.hge_webhook is None and hge_ctx.hge_jwt_key is None:
-            test_forbidden_when_access_key_reqd(hge_ctx, conf)
+            test_forbidden_when_no_access_key(hge_ctx, conf)
+            test_forbidden_incorrect_access_key(hge_ctx, conf)
             headers['X-Hasura-Access-Key'] = hge_ctx.hge_key
 
     code, resp = hge_ctx.anyq( conf['url'], conf['query'], headers)
