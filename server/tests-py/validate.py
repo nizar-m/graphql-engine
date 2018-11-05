@@ -8,13 +8,14 @@ import jsondiff
 import jwt
 import random
 
+
 def check_keys(keys, obj):
     for k in keys:
         assert k in obj, obj
 
-def check_ev_payload_shape(ev_payload):
 
-    top_level_keys = [ "created_at", "event", "id", "table", "trigger"]
+def check_ev_payload_shape(ev_payload):
+    top_level_keys = ["created_at", "event", "id", "table", "trigger"]
     check_keys(top_level_keys, ev_payload)
 
     event_keys = ["data", "op"]
@@ -23,21 +24,24 @@ def check_ev_payload_shape(ev_payload):
     trigger_keys = ["id", "name"]
     check_keys(trigger_keys, ev_payload['trigger'])
 
+
 def validate_event_payload(ev_payload, trig_name, table):
     check_ev_payload_shape(ev_payload)
     assert ev_payload['table'] == table, ev_payload
     assert ev_payload['trigger']['name'] == trig_name, ev_payload
+
 
 def validate_event_headers(ev_headers, headers):
     for key, value in headers.items():
         v = ev_headers.get(key)
         assert v == value, (key, v)
 
+
 def validate_event_webhook(ev_webhook_path, webhook_path):
     assert ev_webhook_path == webhook_path
 
-def check_event(hge_ctx, trig_name, table, operation, exp_ev_data, headers, webhook_path):
 
+def check_event(hge_ctx, trig_name, table, operation, exp_ev_data, headers, webhook_path):
     ev_full = hge_ctx.get_event(3)
     validate_event_webhook(ev_full['path'], webhook_path)
     validate_event_headers(ev_full['headers'], headers)
@@ -69,29 +73,30 @@ def test_forbidden_incorrect_access_key(hge_ctx, conf):
 
     #Test with random access key
     headers['X-Hasura-Access-Key'] = base64.b64encode(os.urandom(30))
-    code, resp = hge_ctx.anyq( conf['url'], conf['query'], headers)
-    assert code == 401, "\n" + yaml.dump( {
-        "expected" : "Should be access denied as an incorrect access key is provided",
-        "actual" : {
-            "code" : code,
-            "response" : resp
-            }
-        } )
+    code, resp = hge_ctx.anyq(conf['url'], conf['query'], headers)
+    assert code == 401, "\n" + yaml.dump({
+        "expected": "Should be access denied as an incorrect access key is provided",
+        "actual": {
+            "code": code,
+            "response": resp
+        }
+    })
+
 
 def test_forbidden_webhook(hge_ctx, conf):
+    h = {'Authorization': 'Bearer ' + base64.b64encode(base64.b64encode(os.urandom(30))).decode('utf-8')}
+    code, resp = hge_ctx.anyq(conf['url'], conf['query'], h)
+    assert code == 401, "\n" + yaml.dump({
+        "expected": "Should be access denied as it is denied from webhook",
+        "actual": {
+            "code": code,
+            "response": resp
+        }
+    })
 
-    h = { 'Authorization' : 'Bearer ' + base64.b64encode(base64.b64encode(os.urandom(30))).decode('utf-8') }
-    code, resp = hge_ctx.anyq( conf['url'], conf['query'], h )
-    assert code == 401, "\n" + yaml.dump( {
-        "expected" : "Should be access denied as it is denied from webhook",
-        "actual" : {
-            "code" : code,
-            "response" : resp
-            }
-        } )
 
 def check_query(hge_ctx, conf, add_auth=True):
-    headers={}
+    headers = {}
     if 'headers' in conf:
         headers = conf['headers']
 
@@ -112,8 +117,8 @@ def check_query(hge_ctx, conf, add_auth=True):
 
             for key in headers:
                 if key != 'X-Hasura-Role':
-                    hClaims[key]=headers[key]
-            claim={
+                    hClaims[key] = headers[key]
+            claim = {
                 "sub": "foo",
                 "name": "bar",
                 "https://hasura.io/jwt/claims": hClaims
@@ -129,7 +134,7 @@ def check_query(hge_ctx, conf, add_auth=True):
                     headers['X-Hasura-Access-Key'] = hge_ctx.hge_key
 
         #Webhook auth mode
-        if hge_ctx.hge_webhook is not None:
+        elif hge_ctx.hge_webhook is not None:
             if not hge_ctx.webhook_insecure:
                 test_forbidden_webhook(hge_ctx, conf)
             headers['X-Hasura-Auth-Mode'] = 'webhook'
@@ -156,8 +161,8 @@ def check_query(hge_ctx, conf, add_auth=True):
             test_forbidden_incorrect_access_key(hge_ctx, conf)
             headers['X-Hasura-Access-Key'] = hge_ctx.hge_key
 
-    code, resp = hge_ctx.anyq( conf['url'], conf['query'], headers)
-    print (headers)
+    code, resp = hge_ctx.anyq(conf['url'], conf['query'], headers)
+    print(headers)
     assert code == conf['status'], resp
     if 'response' in conf:
         assert json_ordered(resp) == json_ordered(conf['response']) , yaml.dump( {
@@ -165,8 +170,9 @@ def check_query(hge_ctx, conf, add_auth=True):
             'response' : resp,
             'expected' : conf['response'],
             'diff': jsondiff.diff(conf['response'], resp)
-        } )
+        })
     return code, resp
+
 
 def check_query_f(hge_ctx, f, add_auth=True):
     hge_ctx.may_skip_test_teardown = False
@@ -174,11 +180,12 @@ def check_query_f(hge_ctx, f, add_auth=True):
         conf = yaml.safe_load(c)
         if isinstance(conf, list):
             for sconf in conf:
-                check_query( hge_ctx, sconf)
+                check_query(hge_ctx, sconf)
         else:
             if conf['status'] != 200:
                 hge_ctx.may_skip_test_teardown = True
-            check_query( hge_ctx, conf, add_auth )
+            check_query(hge_ctx, conf, add_auth)
+
 
 def json_ordered(obj):
     if isinstance(obj, dict):
