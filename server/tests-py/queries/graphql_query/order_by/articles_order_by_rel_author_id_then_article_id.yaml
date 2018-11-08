@@ -44,7 +44,11 @@ query:
   query: |
     query {
       article(
-      order_by: {author: {id: desc}}
+      order_by:
+        {
+          author: {id: desc},
+          id: asc
+        }
       ){
         id
         title

@@ -282,8 +282,14 @@ class TestGraphQLQueryOrderBy(DefaultTestSelectQueries):
     def test_articles_order_by_rel_author_id(self, hge_ctx):
         check_query_f(hge_ctx, self.dir() + '/articles_order_by_rel_author_id.yaml')
 
+    def test_articles_order_by_rel_author_id_then_article_id(self, hge_ctx):
+        check_query_f(hge_ctx, self.dir() + '/articles_order_by_rel_author_id_then_article_id.yaml')
+
     def test_articles_order_by_rel_author_rel_contact_phone(self, hge_ctx):
         check_query_f(hge_ctx, self.dir() + '/articles_order_by_rel_author_rel_contact_phone.yaml')
+
+    def test_articles_order_by_rel_contact_phone_then_article_id(self, hge_ctx):
+        check_query_f(hge_ctx, self.dir() + '/articles_order_by_rel_contact_phone_then_article_id.yaml')
 
     def test_articles_order_by_rel_unexpected_order_type_err(self, hge_ctx):
         check_query_f(hge_ctx, self.dir() + '/articles_order_by_rel_unexpected_order_type_err.yaml')

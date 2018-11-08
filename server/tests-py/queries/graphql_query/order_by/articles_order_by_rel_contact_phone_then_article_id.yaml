@@ -1,0 +1,83 @@
+description: Fetch articles by their author contact phone (ASC) then article id (DESC)
+url: /v1alpha1/graphql
+status: 200
+response:
+  data:
+    article:
+    - id: 3
+      title: Article 1 by Author 2
+      content: Sample article content 1 by Author 2
+      author:
+        id: 2
+        name: Author 2
+        contact:
+          id: 2
+          phone: 1234567890
+    - id: 2
+      title: Article 2 by Author 1
+      content: Sample article content 2 by Author 1
+      author:
+        id: 1
+        name: Author 1
+        contact:
+          id: 1
+          phone: 1234567891
+    - id: 1
+      title: Article 1 by Author 1
+      content: Sample article content 1 by Author 1
+      author:
+        id: 1
+        name: Author 1
+        contact:
+          id: 1
+          phone: 1234567891
+    - id: 6
+      title: Article 3 by Author 3
+      content: Sample article content 3 by Author 3
+      author:
+        id: 3
+        name: Author 3
+        contact:
+          id: 3
+          phone: 1234567892
+    - id: 5
+      title: Article 2 by Author 3
+      content: Sample article content 2 by Author 3
+      author:
+        id: 3
+        name: Author 3
+        contact:
+          id: 3
+          phone: 1234567892
+    - id: 4
+      title: Article 1 by Author 3
+      content: Sample article content 1 by Author 3
+      author:
+        id: 3
+        name: Author 3
+        contact:
+          id: 3
+          phone: 1234567892
+query:
+  query: |
+    query {
+      article(
+      order_by:
+        {
+          author: {contact: {phone: asc}},
+          id: desc
+        }
+      ){
+        id
+        title
+        content
+        author {
+          id
+          name
+          contact {
+            id
+            phone
+          }
+        }
+      }
+    }

@@ -4,32 +4,59 @@ status: 200
 response:
   data:
     article:
+    - id: 4
+      title: Article 1 by Author 3
+      content: Sample article content 1 by Author 3
+      author:
+        id: 3
+        name: Author 3
+        contact:
+          id: 3
+          phone: 1234567892
+    - id: 5
+      title: Article 2 by Author 3
+      content: Sample article content 2 by Author 3
+      author:
+        id: 3
+        name: Author 3
+        contact:
+          id: 3
+          phone: 1234567892
+    - id: 6
+      title: Article 3 by Author 3
+      content: Sample article content 3 by Author 3
+      author:
+        id: 3
+        name: Author 3
+        contact:
+          id: 3
+          phone: 1234567892
     - id: 1
-      title: Article 1
-      content: Sample article content 1
+      title: Article 1 by Author 1
+      content: Sample article content 1 by Author 1
       author:
         id: 1
         name: Author 1
         contact:
-          id: 2
+          id: 1
           phone: 1234567891
     - id: 2
-      title: Article 2
-      content: Sample article content 2
+      title: Article 2 by Author 1
+      content: Sample article content 2 by Author 1
       author:
         id: 1
         name: Author 1
         contact:
-          id: 2
+          id: 1
           phone: 1234567891
     - id: 3
-      title: Article 3
-      content: Sample article content 3
+      title: Article 1 by Author 2
+      content: Sample article content 1 by Author 2
       author:
         id: 2
         name: Author 2
         contact:
-          id: 1
+          id: 2
           phone: 1234567890
 query:
   query: |

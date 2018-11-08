@@ -5,7 +5,7 @@ response:
   errors:
   - code: validation-failed
     path: $.selectionSet.article.args.order_by[0].notPresentCol
-    error: |- 
+    error: |-
       field "notPresentCol" not found in type: 'article_order_by'
 query:
   query: |
