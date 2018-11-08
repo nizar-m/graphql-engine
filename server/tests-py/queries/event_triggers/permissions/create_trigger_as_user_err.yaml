@@ -1,0 +1,19 @@
+url: /v1/query
+status: 400
+headers:
+  X-Hasura-Role: user
+  X-Hasura-User-Id: '1'
+response:
+  path: $.args
+  error: 'restricted access : admin only'
+  code: access-denied
+query:
+  type: create_event_trigger
+  args:
+    name: t1_as_user
+    table:
+      schema: hge_tests
+      name: test_t1
+    insert:
+      columns: "*"
+    webhook: http://127.0.0.1:5592

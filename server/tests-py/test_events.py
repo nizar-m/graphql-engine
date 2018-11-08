@@ -4,7 +4,8 @@ import pytest
 import queue
 import yaml
 import time
-from validate import check_event
+from validate import check_event, check_query_f
+from super_classes import DefaultTestQueries
 
 if pytest.config.getoption("--hge-jwt-key-file"):
     pytest.skip("Skipping event based tests when JWT auth is present", allow_module_level=True)
@@ -63,6 +64,18 @@ def delete(hge_ctx, table, where_exp):
     st_code, resp = hge_ctx.v1q(q)
     return st_code, resp
 
+
+class TestCreateEvtPermissions(DefaultTestQueries):
+
+    def test_create_trigger_as_user_err(self, hge_ctx):
+        check_query_f(hge_ctx, self.dir() + "/create_trigger_as_user_err.yaml")
+
+    def test_delete_trigger_as_user_err(self, hge_ctx):
+        check_query_f(hge_ctx, self.dir() + "/delete_trigger_as_user_err.yaml")
+
+    @classmethod
+    def dir(cls):
+        return "queries/event_triggers/permissions"
 
 class TestCreateEvtQuery(object):
 
