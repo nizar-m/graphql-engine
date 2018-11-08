@@ -266,6 +266,9 @@ class TestGraphQLQueryBoolExpJsonB(DefaultTestSelectQueries):
     def test_jsonb_has_keys_all_touchscreen_ram(self, hge_ctx):
         check_query_f(hge_ctx, self.dir() + '/select_product_jsonb_has_keys_all_ram_touchscreen.yaml')
 
+    def test_article_unexpected_jsonb_operator_err(self, hge_ctx):
+        check_query_f(hge_ctx, self.dir() + '/select_article_unexpected_jsonb_operator_err.yaml')
+
     @classmethod
     def dir(cls):
         return 'queries/graphql_query/boolexp/jsonb'
