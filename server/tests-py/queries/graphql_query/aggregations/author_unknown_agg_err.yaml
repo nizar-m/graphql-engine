@@ -1,0 +1,20 @@
+description: 'Aggregation error: Unknown aggregation type'
+url: /v1alpha1/graphql
+status: 400
+response:
+  errors:
+  - path: $.selectionSet.author_aggregate.selectionSet.aggregate.selectionSet.unknown
+    code: validation-failed
+    error: |-
+      field "unknown" not found in type: 'author_aggregate_fields'
+query:
+  query: |
+   query author_aggregations{
+     author_aggregate{
+       aggregate{
+         unknown{
+           id
+         }
+       }
+     }
+   }
