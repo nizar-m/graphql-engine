@@ -5,22 +5,21 @@ args:
     sql: |
       create table hge_tests.test_t1(
           c1 int,
-          c2 text
+          c2 text,
+          c3 jsonb
       );
 - type: track_table
   args:
     schema: hge_tests
     name: test_t1
-- type: create_event_trigger
+- type: run_sql
   args:
-    name: t1_all
-    table:
-      schema: hge_tests
-      name: test_t1
-    insert:
-      columns: "*"
-    update:
-      columns: "*"
-    delete:
-      columns: "*"
-    webhook: http://127.0.0.1:5592
+    sql: |
+      create table hge_tests."testQuoted"(
+          "tC1" int,
+          "tC2" text
+      );
+- type: track_table
+  args:
+    schema: hge_tests
+    name: testQuoted

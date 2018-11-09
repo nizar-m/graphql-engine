@@ -7,6 +7,7 @@ import base64
 import jsondiff
 import jwt
 import random
+import time
 
 
 def check_keys(keys, obj):
@@ -41,6 +42,10 @@ def validate_event_webhook(ev_webhook_path, webhook_path):
     assert ev_webhook_path == webhook_path
 
 
+def assert_no_event(hge_ctx, operation):
+    time.sleep(1)
+    assert hge_ctx.resp_queue.empty(), "Expecting no event on " + operation + ". But found event " + json.dumps( hge_ctx.resp_queue.get_nowait()['body'] )
+
 def check_event(hge_ctx, trig_name, table, operation, exp_ev_data, headers, webhook_path):
     ev_full = hge_ctx.get_event(3)
     validate_event_webhook(ev_full['path'], webhook_path)
@@ -49,6 +54,7 @@ def check_event(hge_ctx, trig_name, table, operation, exp_ev_data, headers, webh
     ev = ev_full['body']['event']
     assert ev['op'] == operation, ev
     assert ev['data'] == exp_ev_data, ev
+    hge_ctx.event_task_done()
 
 
 def test_forbidden_when_no_access_key(hge_ctx, conf):

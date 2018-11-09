@@ -107,6 +107,9 @@ class HGECtx:
     def get_event(self, timeout):
         return self.resp_queue.get(timeout=timeout)
 
+    def event_task_done(self):
+        return self.resp_queue.task_done()
+
     def get_error_queue_size(self):
         sz = 0
         while not self.error_queue.empty():

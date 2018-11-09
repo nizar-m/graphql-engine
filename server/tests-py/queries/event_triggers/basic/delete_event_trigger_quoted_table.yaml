@@ -1,0 +1,7 @@
+description: Delete event trigger t1_all
+url: /v1/query
+status: 200
+query:
+  type: delete_event_trigger
+  args:
+    name: tQuoted

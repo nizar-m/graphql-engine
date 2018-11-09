@@ -1,0 +1,18 @@
+description: Create insert event trigger with empty payload specified (error)
+url: /v1/query
+status: 400
+response:
+  path: $
+  error: found empty payload specification
+  code: parse-failed
+query:
+  type: create_event_trigger
+  args:
+    name: t1_empty_cols_list
+    table:
+      schema: hge_tests
+      name: test_t1
+    insert:
+      columns: '*'
+      payload: []
+    webhook: http://127.0.0.1:5592

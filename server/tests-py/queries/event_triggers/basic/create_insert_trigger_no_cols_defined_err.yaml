@@ -1,0 +1,17 @@
+description: Create insert event trigger with empty cols specified (error)
+url: /v1/query
+status: 400
+response:
+  path: $
+  error: found empty column specification
+  code: parse-failed
+query:
+  type: create_event_trigger
+  args:
+    name: t1_empty_cols_list
+    table:
+      schema: hge_tests
+      name: test_t1
+    insert:
+      columns: []
+    webhook: http://127.0.0.1:5592

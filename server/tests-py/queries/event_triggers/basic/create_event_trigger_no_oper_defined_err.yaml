@@ -1,0 +1,15 @@
+description: Create event trigger with no operation defined (error)
+url: /v1/query
+status: 400
+response:
+  path: $
+  error: must provide operation spec(s)
+  code: parse-failed
+query:
+  type: create_event_trigger
+  args:
+    name: t1_no_oper_defined
+    table:
+      schema: hge_tests
+      name: test_t1
+    webhook: http://127.0.0.1:5592

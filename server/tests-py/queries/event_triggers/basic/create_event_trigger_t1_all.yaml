@@ -1,0 +1,17 @@
+description: Create event trigger for all of the insert/update/delete operations
+url: /v1/query
+status: 200
+query:
+  type: create_event_trigger
+  args:
+    name: t1_all
+    table:
+      schema: hge_tests
+      name: test_t1
+    insert:
+      columns: "*"
+    update:
+      columns: "*"
+    delete:
+      columns: "*"
+    webhook: http://127.0.0.1:5592

@@ -2,8 +2,12 @@ type: bulk
 args:
 - type: delete_event_trigger
   args:
-    name: t1_cols
+    name: t1_update
 - type: run_sql
   args:
     sql: |
       drop table hge_tests.test_t1
+- type: run_sql
+  args:
+    sql: |
+      drop table hge_tests.test_t2

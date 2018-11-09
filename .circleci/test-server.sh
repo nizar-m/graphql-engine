@@ -113,6 +113,8 @@ WH_PID=""
 trap stop_services ERR
 trap stop_services INT
 
+export HASURA_GRAPHQL_EVENTS_FETCH_INTERVAL="250"
+
 echo -e "\n<########## TEST GRAPHQL-ENGINE WITHOUT ACCESS KEYS ###########################################>\n"
 
 "$GRAPHQL_ENGINE" serve > "$OUTPUT_FOLDER/graphql-engine.log" & PID=$!

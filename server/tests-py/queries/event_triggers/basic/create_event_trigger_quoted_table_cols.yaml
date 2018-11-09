@@ -1,0 +1,27 @@
+description: Create event trigger for a table with quoted table and column names
+url: /v1/query
+status: 200
+query:
+  type: create_event_trigger
+  args:
+    name: tQuoted
+    table:
+      schema: hge_tests
+      name: testQuoted
+    insert:
+      columns:
+      - tC1
+      - tC2
+      payload:
+      - tC2
+    update:
+      columns:
+      - tC1
+      payload:
+      - tC1
+    delete:
+      columns:
+      - tC2
+      payload:
+      - tC2
+    webhook: http://127.0.0.1:5592
