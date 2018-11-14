@@ -1,0 +1,21 @@
+description: Select on articles with jsonb operator on non-jsonb column
+url: /v1alpha1/graphql
+status: 400
+response:
+  errors:
+  - path: $.selectionSet.article.args.where.id._contains
+    error: |-
+      field "_contains" not found in type: 'integer_comparison_exp'
+    code: validation-failed
+query:
+  query: |
+    query ($tags: jsonb) {
+      article (
+      where: { id: {_contains: "latest"}}
+      ) {
+        id
+        title
+        content
+        tags
+      }
+    }

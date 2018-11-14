@@ -272,6 +272,9 @@ class TestGraphQLQueryBoolExpJsonB(DefaultTestSelectQueries):
     def test_article_unexpected_jsonb_operator_err(self, hge_ctx):
         check_query_f(hge_ctx, self.dir() + '/select_article_unexpected_jsonb_operator_err.yaml')
 
+    def test_article_jsonb_operator_on_non_jsonb_col_err(self, hge_ctx):
+        check_query_f(hge_ctx, self.dir() + '/select_article_jsonb_operator_on_non_jsonb_col_err.yaml')
+
     @classmethod
     def dir(cls):
         return 'queries/graphql_query/boolexp/jsonb'
