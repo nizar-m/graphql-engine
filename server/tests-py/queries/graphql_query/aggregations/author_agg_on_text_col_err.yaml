@@ -1,0 +1,20 @@
+description: 'Aggregation error: Aggregation on a text column: error'
+url: /v1alpha1/graphql
+status: 400
+response:
+  errors:
+  - path: $.selectionSet.author_aggregate.selectionSet.aggregate.selectionSet.sum.selectionSet.name
+    code: validation-failed
+    error: |-
+      field "name" not found in type: 'author_sum_fields'
+query:
+  query: |
+   query author_aggregations{
+     author_aggregate{
+       aggregate{
+         sum{
+           name
+         }
+       }
+     }
+   }

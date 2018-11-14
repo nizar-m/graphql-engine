@@ -76,6 +76,9 @@ class TestGraphQLQueryAgg(DefaultTestSelectQueries):
     def test_author_unknown_agg_err(self, hge_ctx):
         check_query_f(hge_ctx, self.dir() + '/author_unknown_agg_err.yaml')
 
+    def test_author_agg_on_text_col_err(self, hge_ctx):
+        check_query_f(hge_ctx, self.dir() + '/author_agg_on_text_col_err.yaml')
+
     def test_article_agg_where(self, hge_ctx):
         check_query_f(hge_ctx, self.dir() + '/article_agg_where.yaml')
 
