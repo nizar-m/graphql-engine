@@ -1,0 +1,19 @@
+description: Simple GraphQL object query on author
+url: /v1alpha1/graphql
+status: 400
+response:
+  errors:
+  - path: $.selectionSet
+    error: |-
+      cannot merge different fields under the same alias ("name"): id, name
+    code: validation-failed
+query:
+  query: |
+    query {
+      author {
+        name: id
+      }
+      author {
+        name
+      }
+    }

@@ -8,6 +8,9 @@ class TestGraphQLQueryBasic(DefaultTestSelectQueries):
     def test_select_query_author(self, hge_ctx):
         check_query_f(hge_ctx, self.dir() + '/select_query_author.yaml')
 
+    def test_select_query_graphql_merge_err(self, hge_ctx):
+        check_query_f(hge_ctx, self.dir() + '/select_query_author_graphql_merge_err.yaml')
+
     def test_select_various_postgres_types(self, hge_ctx):
         check_query_f(hge_ctx, self.dir() + '/select_query_test_types.yaml')
 
