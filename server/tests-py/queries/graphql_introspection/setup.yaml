@@ -6,7 +6,7 @@ args:
   args:
     sql: |
       create table author(
-          id serial primary key, 
+          id serial primary key,
           name text unique
       );
 - type: track_table
@@ -30,6 +30,20 @@ args:
   args:
     schema: public
     name: article
+
+#User table
+- type: run_sql
+  args:
+    sql: |
+      CREATE TABLE "user" (
+        id BIGSERIAL,
+        name TEXT NOT NULL,
+        number BIGINT
+      );
+- type: track_table
+  args:
+    schema: public
+    name: user
 
 #Object relationship
 - type: create_object_relationship
@@ -98,12 +112,23 @@ args:
         id: X-HASURA-USER-ID
 
 #Author insert permission for user
-- type: create_insert_permission
+- type: create_update_permission
   args:
     table: author
     role: user
     permission:
-      check:
+      columns:
+      - name
+      filter:
         id: X-HASURA-USER-ID
       allow_upsert: true
+
+#Author insert permission for user
+- type: create_delete_permission
+  args:
+    table: user
+    role: user
+    permission:
+      filter:
+        id: X-HASURA-USER-ID
 
