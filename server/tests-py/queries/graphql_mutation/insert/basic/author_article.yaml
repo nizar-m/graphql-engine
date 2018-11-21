@@ -9,10 +9,30 @@
           name: Author 1
         - id: 2
           name: Author 2
+      insert_article:
+        returning:
+        - content: Sample article content
+          id: 1
+          title: Article 1
+          author:
+            id: 1
+            name: Author 1
+        - content: Sample article content
+          id: 2
+          title: Article 2
+          author:
+            id: 1
+            name: Author 1
+        - content: Sample article content
+          id: 3
+          title: Article 3
+          author:
+            id: 2
+            name: Author 2
   status: 200
   query:
     query: |
-      mutation insert_author {
+      mutation insert_author_article {
         insert_author(
           objects: [
             {
@@ -28,28 +48,7 @@
             name
           }
         }
-      } 
 
-#Inserting article data
-- description: Inserts article data via GraphQL mutation
-  url: /v1alpha1/graphql
-  response:
-    data:
-      insert_article:
-        returning:
-        - content: Sample article content
-          id: 1
-          title: Article 1
-        - content: Sample article content
-          id: 2
-          title: Article 2
-        - content: Sample article content
-          id: 3
-          title: Article 3
-  status: 200
-  query:
-    query: |
-      mutation insert_article {
         insert_article (
           objects: [
           {
@@ -73,9 +72,13 @@
             id
             title
             content
+            author {
+              id
+              name
+            }
           }
         }
-      } 
+      }
 - description: Delete the inserted articles
   url: /v1/query
   status: 200
