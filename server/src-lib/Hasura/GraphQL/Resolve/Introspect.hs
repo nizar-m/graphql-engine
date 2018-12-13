@@ -1,9 +1,9 @@
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE MultiWayIf          #-}
-{-# LANGUAGE NoImplicitPrelude   #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE MultiWayIf            #-}
+{-# LANGUAGE NoImplicitPrelude     #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 
 module Hasura.GraphQL.Resolve.Introspect
   ( schemaR
@@ -72,7 +72,7 @@ scalarR (ScalarTyInfo descM pgColType _) fld =
     "__typename"  -> retJT "__Type"
     "kind"        -> retJ TKSCALAR
     "description" -> retJ $ fmap G.unDescription descM
-    "name"        -> retJ $ pgColTyToScalar pgColType
+    "name"        -> retJ $ either gqTyToScalar pgColTyToScalar pgColType
     _             -> return J.Null
 
 -- 4.5.2.2
@@ -82,18 +82,54 @@ objectTypeR
   => ObjTyInfo
   -> Field
   -> m J.Object
-objectTypeR (ObjTyInfo descM n flds) fld =
+objectTypeR (ObjTyInfo descM n ifaces flds) fld =
   withSubFields (_fSelSet fld) $ \subFld ->
   case _fName subFld of
     "__typename"  -> retJT "__Type"
     "kind"        -> retJ TKOBJECT
     "name"        -> retJ $ namedTyToTxt n
     "description" -> retJ $ fmap G.unDescription descM
-    "interfaces"  -> retJ ([] :: [()])
+    "interfaces"  -> fmap J.toJSON $ mapM (`ifaceR` subFld) ifaces
     "fields"      -> fmap J.toJSON $ mapM (`fieldR` subFld) $
                     sortBy (comparing _fiName) $
                     filter notBuiltinFld $ Map.elems flds
     _             -> return J.Null
+
+ifaceR
+  :: ( MonadReader r m, Has TypeMap r
+     , MonadError QErr m)
+  => G.NamedType
+  -> Field
+  -> m J.Object
+ifaceR n fld = do
+  tyInfo <- getTyInfo n
+  case tyInfo of
+    TIIFace ifaceTyInfo -> ifaceR' ifaceTyInfo fld
+    _                   -> throw500 $ "Unknown interface " <> G.unName (G.unNamedType n)
+
+ifaceR'
+  :: ( MonadReader r m, Has TypeMap r
+     , MonadError QErr m)
+  => IFaceTyInfo
+  -> Field
+  -> m J.Object
+ifaceR' i@(IFaceTyInfo descM n flds) fld =
+  withSubFields (_fSelSet fld) $ \subFld ->
+  case _fName subFld of
+    "__typename"    -> retJT "__Type"
+    "kind"          -> retJ TKINTERFACE
+    "name"          -> retJ $ namedTyToTxt n
+    "description"   -> retJ $ fmap G.unDescription descM
+    "fields"        -> fmap J.toJSON $ mapM (`fieldR` subFld) $
+                      sortBy (comparing _fiName) $
+                      filter notBuiltinFld $ Map.elems flds
+    "possibleTypes" -> fmap J.toJSON $ mapM (`objectTypeR` subFld) =<< implTypes
+    _               -> return J.Null
+    where
+      implTypes = do
+        tyInfo :: TypeMap <- asks getter
+        return $ getPossibleObjTy' (SSOIFace i) $ Map.elems tyInfo
+
 
 notBuiltinFld :: ObjFldInfo -> Bool
 notBuiltinFld f =
@@ -187,6 +223,7 @@ namedTypeR' fld = \case
   TIObj objTyInfo       -> objectTypeR objTyInfo fld
   TIEnum enumTypeInfo   -> enumTypeR enumTypeInfo fld
   TIInpObj inpObjTyInfo -> inputObjR inpObjTyInfo fld
+  TIIFace ifaceTyInfo   -> ifaceR' ifaceTyInfo fld
 
 -- 4.5.3
 fieldR

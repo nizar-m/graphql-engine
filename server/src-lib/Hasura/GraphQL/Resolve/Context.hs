@@ -7,6 +7,7 @@
 
 module Hasura.GraphQL.Resolve.Context
   ( FieldMap
+  , TyFldInfo(..)
   , RelationInfoMap
   , OrdByCtx
   , OrdByItemMap
@@ -15,6 +16,7 @@ module Hasura.GraphQL.Resolve.Context
   , InsCtxMap
   , RespTx
   , InsertTxConflictCtx(..)
+  , CurRowId(..)
   , getFldInfo
   , getPGColInfo
   , getArg
@@ -100,7 +102,7 @@ type RespTx = Q.TxE QErr BL.ByteString
 getFldInfo
   :: (MonadError QErr m, MonadReader r m, Has FieldMap r)
   => G.NamedType -> G.Name
-  -> m (Either PGColInfo (RelInfo, Bool, AnnBoolExpSQL, Maybe Int))
+  -> m TyFldInfo
 getFldInfo nt n = do
   fldMap <- asks getter
   onNothing (Map.lookup (nt,n) fldMap) $
@@ -113,8 +115,8 @@ getPGColInfo
 getPGColInfo nt n = do
   fldInfo <- getFldInfo nt n
   case fldInfo of
-    Left pgColInfo -> return pgColInfo
-    Right _        -> throw500 $
+    TFICol pgColInfo -> return pgColInfo
+    _        -> throw500 $
       "found relinfo when expecting pgcolinfo for "
       <> showNamedTy nt <> ":" <> showName n
 
@@ -158,7 +160,7 @@ withArgM args arg f = prependArgsInPath $ nameAsPath arg $
 type PrepArgs = Seq.Seq Q.PrepArg
 
 type Convert =
-  StateT PrepArgs (ReaderT (FieldMap, OrdByCtx, InsCtxMap) (Except QErr))
+  StateT PrepArgs (ReaderT (FieldMap, OrdByCtx, InsCtxMap, TypeMap) (Except QErr))
 
 prepare
   :: (MonadState PrepArgs m)
@@ -170,7 +172,7 @@ prepare (colTy, colVal) = do
 
 runConvert
   :: (MonadError QErr m)
-  => (FieldMap, OrdByCtx, InsCtxMap) -> Convert a -> m (a, PrepArgs)
+  => (FieldMap, OrdByCtx, InsCtxMap, TypeMap) -> Convert a -> m (a, PrepArgs)
 runConvert ctx m =
   either throwError return $
   runExcept $ runReaderT (runStateT m Seq.empty) ctx

@@ -41,7 +41,7 @@ data PGColInfo
   { pgiName       :: !PGCol
   , pgiType       :: !PGColType
   , pgiIsNullable :: !Bool
-  } deriving (Show, Eq)
+  } deriving (Show, Eq, Ord)
 
 $(deriveToJSON (aesonDrop 3 snakeCase) ''PGColInfo)
 

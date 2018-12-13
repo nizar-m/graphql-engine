@@ -1,15 +1,19 @@
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TemplateHaskell   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Hasura.GraphQL.Validate.Field
   ( ArgsMap
   , Field(..)
   , SelSet
   , denormSelSet
+  , mergeFields
   ) where
 
+import           Data.Has
 import           Hasura.Prelude
 
 import qualified Data.Aeson                          as J
@@ -50,43 +54,23 @@ data TypedOperation
 
 type ArgsMap = Map.HashMap G.Name AnnGValue
 
+type CondSelSetMap = Map.HashMap G.NamedType SelSet
+
 type SelSet = Seq.Seq Field
 
 data Field
   = Field
-  { _fAlias     :: !G.Alias
-  , _fName      :: !G.Name
-  , _fType      :: !G.NamedType
-  , _fArguments :: !ArgsMap
-  , _fSelSet    :: !SelSet
+  { _fAlias         :: !G.Alias
+  , _fName          :: !G.Name
+  , _fType          :: !G.NamedType
+  , _fArguments     :: !ArgsMap
+  , _fSelSet        :: !SelSet
+  , _fCondSelSet    :: !CondSelSetMap
   } deriving (Eq, Show)
 
 $(J.deriveToJSON (J.aesonDrop 2 J.camelCase){J.omitNothingFields=True}
   ''Field
  )
-
--- newtype FieldMapAlias
---   = FieldMapAlias
---   { unFieldMapAlias :: Map.HashMap G.Alias (FieldG FieldMapAlias)
---   } deriving (Show, Eq)
-
--- newtype FieldMapName
---   = FieldMapName
---   { unFieldMapName :: Map.HashMap G.Name (NE.NonEmpty (FieldG FieldMapName))
---   } deriving (Show, Eq)
-
--- type Field = FieldG FieldMapAlias
-
--- type FieldGrouped = FieldG FieldMapName
-
--- toFieldGrouped :: Field -> FieldGrouped
--- toFieldGrouped =
---   fmap groupFields
---   where
---     groupFields m =
---       FieldMapName $ groupTuples $
---       flip map (Map.elems $ unFieldMapAlias m) $ \fld ->
---       (_fName fld, toFieldGrouped fld)
 
 data FieldGroupSrc
   = FGSFragSprd !G.Name
@@ -96,8 +80,41 @@ data FieldGroupSrc
 data FieldGroup
   = FieldGroup
   { _fgSource :: !FieldGroupSrc
+  , _fgTyInfo :: !G.NamedType
   , _fgFields :: !(Seq.Seq Field)
+  , _fgCondFields :: !(Map.HashMap G.NamedType (Seq.Seq Field))
   } deriving (Show, Eq)
+
+
+--getTypeCondFieldsFG
+--  :: (MonadReader r m, Has TypeMap r
+--     , MonadError QErr m)
+--  => ObjTyInfo
+--  -> FieldGroup
+--  -> m (Maybe (Seq.Seq Field))
+--getTypeCondFieldsFG tyInfo fg = do
+--  fgTyInfo <- getTyInfo $ _fgTyInfo fg
+--  return $ getTypeCondFields' fgTyInfo (_fgFields fg) (_fgCondFields fg) tyInfo
+--
+--getTypeCondFieldsF
+--  :: (MonadReader r m, Has TypeMap r
+--     , MonadError QErr m)
+--  => ObjTyInfo
+--  -> Field
+--  -> m (Maybe (Seq.Seq Field))
+--getTypeCondFieldsF tyInfo f = do
+--  fldTyInfo <- getTyInfo $ _fType f
+--  return $ getTypeCondFields' fldTyInfo (_fSelSet f) (_fCondSelSet f) tyInfo
+--
+--getTypeCondFields' :: TypeInfo -> a -> Map.HashMap G.NamedType a -> ObjTyInfo -> Maybe a
+--getTypeCondFields' srcTyInfo srcFlds srcCondFlds tyInfo
+--  | TIObj tyInfo == srcTyInfo = Just srcFlds
+--  | TIObj tyInfo `implmntsIFace` srcTyInfo = Just $ fromMaybe srcFlds $ Map.lookup (_otiName tyInfo) $ srcCondFlds
+--  | otherwise = Nothing
+--  where
+--    implmntsIFace (TIObj o) (TIIFace i) = _ifName i `elem` _otiImplIfaces o
+--    implmntsIFace _ _ = False
+
 
 -- data GLoc
 --   = GLoc
@@ -153,21 +170,23 @@ denormSel
   :: ( MonadReader ValidationCtx m
      , MonadError QErr m)
   => [G.Name] -- visited fragments
-  -> ObjTyInfo -- parent type info
+  -> SelSetObj -- parent type info
   -> G.Selection
   -> m (Maybe (Either Field FieldGroup))
-denormSel visFrags parObjTyInfo sel = case sel of
+denormSel visFrags parTyInfo sel = case sel of
   G.SelectionField fld -> withPathK (G.unName $ G._fName fld) $ do
-    fldInfo <- getFieldInfo parObjTyInfo $ G._fName fld
+    fldInfo <- getFldInfo $ G._fName fld
     fmap Left <$> denormFld visFrags fldInfo fld
   G.SelectionFragmentSpread fragSprd ->
     withPathK (G.unName $ G._fsName fragSprd) $
-    fmap Right <$> denormFrag visFrags parTy fragSprd
+    fmap Right <$> denormFrag visFrags parTyInfo fragSprd
   G.SelectionInlineFragment inlnFrag ->
     withPathK "inlineFragment" $
-    fmap Right <$> denormInlnFrag visFrags parObjTyInfo inlnFrag
+    fmap Right <$> denormInlnFrag visFrags parTyInfo inlnFrag
   where
-    parTy = _otiName parObjTyInfo
+    getFldInfo = case parTyInfo of
+      SSOObj obj -> getFieldInfo obj
+      SSOIFace i -> getIFaceFieldInfo i
 
 processArgs
   :: ( MonadReader ValidationCtx m
@@ -216,17 +235,23 @@ denormFld visFrags fldInfo (G.Field aliasM name args dirs selSet) = do
 
   argMap <- withPathK "args" $ processArgs (_fiParams fldInfo) args
 
-  fields <- case (fldTyInfo, selSet) of
+  (fields, condFlds) <- case (fldTyInfo, selSet) of
 
     (TIObj _, [])  ->
       throwVE $ "field " <> showName name <> " of type "
       <> G.showGT fldTy <> " must have a selection of subfields"
 
     (TIObj fldObjTyInfo, _) ->
-      denormSelSet visFrags fldObjTyInfo selSet
+      denormSelSet visFrags (SSOObj fldObjTyInfo) selSet
 
-    (TIScalar _, []) -> return Seq.empty
-    (TIEnum _, []) -> return Seq.empty
+    (TIIFace _, []) ->
+      throwVE $ "field " <> showName name <> " of type "
+      <> G.showGT fldTy <> " must have a selection of subfields"
+
+    (TIIFace ifaceInfo, _) -> denormSelSet visFrags (SSOIFace ifaceInfo) selSet
+    
+    (TIScalar _, []) -> return (Seq.empty, Map.empty)
+    (TIEnum _, []) -> return (Seq.empty, Map.empty)
 
     (TIInpObj _, _) ->
       throwVE $ "internal error: unexpected input type for field: "
@@ -238,45 +263,89 @@ denormFld visFrags fldInfo (G.Field aliasM name args dirs selSet) = do
       <> "selection since type " <> G.showGT fldTy <> " has no subfields"
 
   withPathK "directives" $ withDirectives dirs $ return $
-    Field (fromMaybe (G.Alias name) aliasM) name fldBaseTy argMap fields
+    Field (fromMaybe (G.Alias name) aliasM) name fldBaseTy argMap fields condFlds
 
 denormInlnFrag
   :: ( MonadReader ValidationCtx m
      , MonadError QErr m)
   => [G.Name] -- visited fragments
-  -> ObjTyInfo -- type information of the field
+  -> SelSetObj -- type information of the field
   -> G.InlineFragment
   -> m (Maybe FieldGroup)
 denormInlnFrag visFrags fldTyInfo inlnFrag = do
-  let fldTy  = _otiName fldTyInfo
-  let fragTy = fromMaybe fldTy tyM
-  when (fldTy /= fragTy) $
-    throwVE $ "inline fragment is expected on type " <>
-    showNamedTy fldTy <> " but found " <> showNamedTy fragTy
+  fragTyInfo <- validateFragTypeCond fragTy fldTyInfo
   withPathK "directives" $ withDirectives directives $
-    fmap (FieldGroup FGSInlnFrag) $ denormSelSet visFrags fldTyInfo selSet
+    fmap (uncurry $ FieldGroup FGSInlnFrag fragTy) $
+    denormSelSet visFrags fragTyInfo selSet
   where
     G.InlineFragment tyM directives selSet = inlnFrag
+    fldTy  = selSetTyName fldTyInfo
+    fragTy = fromMaybe fldTy tyM
+
+
+validateFragTypeCond
+  :: ( MonadReader ValidationCtx m
+     , MonadError QErr m)
+  => G.NamedType
+  -> SelSetObj
+  -> m SelSetObj
+validateFragTypeCond fragTy fldTyInfo = do
+  tyInfo :: TypeMap <- asks getter
+  fragTyInfo <- getFragTyInfo
+  let fragPossTy = getPossibleObjTy' fragTyInfo $ Map.elems tyInfo
+      fldPossTy = getPossibleObjTy' fldTyInfo $ Map.elems tyInfo
+      applTy = fragPossTy `L.intersect` fldPossTy
+  when (null applTy) $ throwVE $ "Fragment cannot be spread as objects of the type " <>
+    showNamedTy fldTy <> " can never be of fragment type " <> showNamedTy fragTy
+  return fragTyInfo
+  where
+    fldTy = selSetTyName fldTyInfo
+    getFragTyInfo = do
+      tyMap <- asks _vcTypeMap
+      case Map.lookup fragTy tyMap of
+        Just (TIObj obj) -> return $ SSOObj obj
+        Just (TIIFace i) -> return $ SSOIFace i
+        Just (TIInpObj {}) -> invalidFragTy "an input object"
+        Just (TIScalar {}) -> invalidFragTy "a scalar"
+        Just (TIEnum {}) -> invalidFragTy "an enum"
+        Nothing -> throwVE $ "Type '" <> showNamedTy fragTy <> "', defined as type condition on fragment for type: " <> showNamedTy fldTy <> ", is not found"
+        where
+          invalidFragTy tyStr = throwVE $ "Invalid Fragment type condition:  Type '" <> showNamedTy fragTy  <> "' is " <> tyStr
 
 denormSelSet
   :: ( MonadReader ValidationCtx m
      , MonadError QErr m)
   => [G.Name] -- visited fragments
-  -> ObjTyInfo
+  -> SelSetObj
   -> G.SelectionSet
-  -> m (Seq.Seq Field)
+  -> m (Seq.Seq Field, CondSelSetMap)
 denormSelSet visFrags fldTyInfo selSet =
   withPathK "selectionSet" $ do
     resFlds <- catMaybes <$> mapM (denormSel visFrags fldTyInfo) selSet
-    mergeFields $ foldl' flatten Seq.empty resFlds
+    let (defFlds, condFlds) = foldl' flatten (Seq.empty, Map.empty) resFlds
+    flip (,) condFlds <$> mergeFields defFlds
   where
-    flatten s (Left fld) = s Seq.|> fld
-    flatten s (Right (FieldGroup _ flds)) =
-      s Seq.>< flds
+    fldTy = selSetTyName fldTyInfo
+    flatten (s,cs) (Left fld) =  (s Seq.|> fld, fmap (Seq.|> fld) cs)
+    flatten (s,cs) (Right (FieldGroup _ fragTy flds condFlds ))
+      | fldTy == fragTy = addFldsAllSelSets (s,cs) (flds,condFlds) 
+      | fldTyInfo `implmntsIFace` fragTy = (s Seq.>< fromMaybe flds (Map.lookup fldTy condFlds), cs)
+      | otherwise               = (s, Map.alter (\v -> Just $ fromMaybe s v Seq.>< flds) fragTy cs )
+      where
+        addFldsAllSelSets (oSs, oCss) (nSs,nCss) =
+          ( oSs Seq.>< nSs
+          , Map.fromList $ fmap (\t -> (t, oFlds t Seq.>< nFlds t) ) allCondTy
+          )
+          where
+            oFlds t = Map.lookupDefault oSs t oCss
+            nFlds t = Map.lookupDefault nSs t nCss
+            allCondTy = Map.keys nCss `L.union` Map.keys oCss
+        implmntsIFace (SSOObj o) i = i `elem` _otiImplIfaces o
+        implmntsIFace _ _ = False
+
 
 mergeFields
-  :: ( MonadReader ValidationCtx m
-     , MonadError QErr m)
+  :: (MonadError QErr m)
   => Seq.Seq Field
   -> m (Seq.Seq Field)
 mergeFields flds =
@@ -308,10 +377,10 @@ denormFrag
   :: ( MonadReader ValidationCtx m
      , MonadError QErr m)
   => [G.Name] -- visited fragments
-  -> G.NamedType -- parent type
+  -> SelSetObj -- parent type
   -> G.FragmentSpread
   -> m (Maybe FieldGroup)
-denormFrag visFrags parTy (G.FragmentSpread name directives) = do
+denormFrag visFrags parTyInfo (G.FragmentSpread name directives) = do
 
   -- check for cycles
   when (name `elem` visFrags) $
@@ -319,19 +388,15 @@ denormFrag visFrags parTy (G.FragmentSpread name directives) = do
     <> " within itself via "
     <> T.intercalate "," (map G.unName visFrags)
 
-  (FragDef _ fragTyInfo selSet) <- getFragInfo
+  (FragDef _ fragTy selSet) <- getFragInfo
 
-  let fragTy = _otiName fragTyInfo
+  -- Check whether there is any intersection between allowedTypes on the parent and fragment
+  fragTyInfo <- validateFragTypeCond fragTy parTyInfo
 
-  -- we don't have unions or interfaces so we can get away with equality
-  when (fragTy /= parTy) $
-    throwVE $ "cannot spread fragment " <> showName name <> " defined on " <>
-    showNamedTy fragTy <> " when selecting fields of type " <> showNamedTy parTy
-
-  resFlds <- denormSelSet (name:visFrags) fragTyInfo selSet
+  (resFlds, resCondFlds) <- denormSelSet (name:visFrags) fragTyInfo selSet
 
   withPathK "directives" $ withDirectives directives $
-    return $ FieldGroup (FGSFragSprd  name) resFlds
+    return $ FieldGroup (FGSFragSprd  name) fragTy resFlds resCondFlds
 
   where
     getFragInfo = do

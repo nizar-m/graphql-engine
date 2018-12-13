@@ -13,10 +13,10 @@ import qualified Data.SemVer         as V
 import qualified Data.Text           as T
 
 import           Hasura.Prelude
-import           Hasura.Server.Utils (runScript)
+--import           Hasura.Server.Utils (runScript)
 
 version :: T.Text
-version = T.dropWhileEnd (== '\n') $(runScript "../scripts/get-version.sh")
+version = "v1.0.0-alpha30"
 
 consoleVersion :: T.Text
 consoleVersion = case V.fromText $ T.dropWhile (== 'v') version of
@@ -31,3 +31,5 @@ mkVersion ver = T.pack $ "v" ++ show major ++ "." ++ show minor
 
 currentVersion :: T.Text
 currentVersion = version
+
+

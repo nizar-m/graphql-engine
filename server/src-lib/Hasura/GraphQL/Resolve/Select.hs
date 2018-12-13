@@ -62,8 +62,8 @@ fromSelSet f fldTy flds =
       _ -> do
         fldInfo <- getFldInfo fldTy fldName
         case fldInfo of
-          Left colInfo -> return $ RS.FCol colInfo
-          Right (relInfo, isAgg, tableFilter, tableLimit) -> do
+          TFICol colInfo -> return $ RS.FCol colInfo
+          TFIRel relInfo isAgg tableFilter tableLimit -> do
             let relTN = riRTable relInfo
                 colMapping = riMapping relInfo
             if isAgg then do
@@ -74,10 +74,20 @@ fromSelSet f fldTy flds =
               let annRel = RS.AnnRel (riName relInfo) (riType relInfo)
                            colMapping annSel
               return $ RS.FRel annRel
+          TFIRowId tn cols -> do
+            let colVal ci =
+                  [ S.SELit $ getPGColTxt $ pgiName ci
+                  , S.mkSIdenExp $ pgiName ci ]
+                tSQL =
+                  [ S.SELit $ getSchemaTxt $ qtSchema tn
+                  , S.SELit $ getTableTxt $ qtTable tn
+                  ]
+            return $ RS.FSQLExp $ S.b64Encode $ S.applyJsonBuildArray $
+              tSQL ++ [S.applyJsonBuildObj $ concatMap colVal cols]
+
 
 fieldAsPath :: (MonadError QErr m) => Field -> m a -> m a
 fieldAsPath = nameAsPath . _fName
-
 
 parseTableArgs
   :: (MonadError QErr m, MonadReader r m, Has FieldMap r, Has OrdByCtx r)
@@ -299,3 +309,21 @@ convertAggSelect qt permFilter permLimit fld = do
              fromAggField prepare qt permFilter permLimit fld
   prepArgs <- get
   return $ RS.selectAggP2 (selData, prepArgs)
+
+parseTableConnArgs = undefined
+
+fromConnField
+  :: (MonadError QErr m, MonadReader r m, Has FieldMap r, Has OrdByCtx r)
+  => ((PGColType, PGColValue) -> m S.SQLExp)
+  -> QualifiedTable -> AnnBoolExpSQL -> Maybe Int -> Field -> m RS.AnnConnSel
+fromConnField fn qt permFilter permLimitM fld = fieldAsPath fld $ do
+  tableArgs <- parseTableConnArgs fn args
+  undefined
+  where
+    args = _fArguments fld
+
+convertSelectConn qt permFilter permLimit fld = do
+  selData <- withPathK "selectionSet" $
+             fromConnField prepare qt permFilter permLimit fld
+  prepArgs <- get
+  return $ RS.selectConnP2 (selData, prepArgs)

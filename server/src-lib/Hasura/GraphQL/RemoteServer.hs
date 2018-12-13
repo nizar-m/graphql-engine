@@ -150,11 +150,11 @@ mergeMutRoot a b =
 
 mkNewEmptyMutRoot :: VT.ObjTyInfo
 mkNewEmptyMutRoot = VT.ObjTyInfo (Just "mutation root")
-                    (G.NamedType "mutation_root") Map.empty
+                    (G.NamedType "mutation_root") [] Map.empty
 
 mkNewMutRoot :: VT.ObjFieldMap -> VT.ObjTyInfo
 mkNewMutRoot flds = VT.ObjTyInfo (Just "mutation root")
-                    (G.NamedType "mutation_root") flds
+                    (G.NamedType "mutation_root") [] flds
 
 mergeTyMaps
   :: VT.TypeMap

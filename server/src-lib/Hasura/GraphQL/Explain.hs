@@ -85,8 +85,9 @@ explainField userInfo gCtx fld =
           validateHdrs hdrs
           RS.mkAggSelect <$>
             RS.fromAggField txtConverter tn permFilter permLimit fld
+        --TODO Nizar
         _ -> throw500 "unexpected mut field info for explain"
-
+        
       let selectSQL = TB.run $ toSQL sel
           withExplain = "EXPLAIN (FORMAT TEXT) " <> selectSQL
       planLines <- liftTx $ map runIdentity <$>

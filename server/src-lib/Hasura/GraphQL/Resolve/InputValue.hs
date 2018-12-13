@@ -1,15 +1,16 @@
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE MultiWayIf        #-}
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TupleSections     #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE MultiWayIf            #-}
+{-# LANGUAGE NoImplicitPrelude     #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE TupleSections         #-}
 
 module Hasura.GraphQL.Resolve.InputValue
   ( withNotNull
   , tyMismatch
   , asPGColValM
   , asPGColVal
+  , asGQTyID
   , asEnumVal
   , withObject
   , asObject
@@ -52,6 +53,15 @@ asPGColValM
 asPGColValM = \case
   AGScalar colTy valM -> return $ fmap (colTy,) valM
   v            -> tyMismatch "pgvalue" v
+
+asGQTyID
+  :: (MonadError QErr m)
+  => AnnGValue -> m Text
+asGQTyID = \case
+   AGScalarID (Just val) -> return val
+   AGScalarID Nothing ->
+     throw500 $ "unexpected null for ty"
+   v -> tyMismatch "ID" v
 
 asPGColVal
   :: (MonadError QErr m)

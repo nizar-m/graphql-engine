@@ -348,6 +348,21 @@ mkColDefValMap cols =
 handleIfNull :: SQLExp -> SQLExp -> SQLExp
 handleIfNull l e = SEFnApp "coalesce" [e, l] Nothing
 
+b64Encode :: SQLExp -> SQLExp
+b64Encode = encode "base64" . convertTo "UTF8"
+
+convertTo :: Text -> SQLExp -> SQLExp
+convertTo enc d =
+ SEFnApp "convert_to" [ SETyAnn d txt, SELit enc] Nothing
+ where
+   txt = AnnType "text"
+
+encode :: Text -> SQLExp -> SQLExp
+encode fmt d =
+  SEFnApp "encode" [ SETyAnn d byteA, SELit fmt] Nothing
+  where
+    byteA = AnnType "bytea"
+
 applyJsonBuildObj :: [SQLExp] -> SQLExp
 applyJsonBuildObj args =
   SEFnApp "json_build_object" args Nothing
@@ -355,6 +370,10 @@ applyJsonBuildObj args =
 applyRowToJson :: [Extractor] -> SQLExp
 applyRowToJson extrs =
   SEFnApp "row_to_json" [mkRowExp extrs] Nothing
+
+applyJsonBuildArray :: [SQLExp] -> SQLExp
+applyJsonBuildArray args  =
+  SEFnApp "json_build_array" args Nothing
 
 getExtrAlias :: Extractor -> Maybe Alias
 getExtrAlias (Extractor _ ma) = ma

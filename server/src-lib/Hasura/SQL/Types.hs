@@ -233,7 +233,7 @@ data PGColType
   | PGGeometry
   | PGGeography
   | PGUnknown !T.Text
-  deriving (Eq, Lift, Generic)
+  deriving (Eq, Ord, Lift, Generic)
 
 instance Hashable PGColType
 

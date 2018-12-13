@@ -197,15 +197,21 @@ validateNamedTypeVal inpValParser nt val = do
     TIObj _ ->
       throw500 $ "unexpected object type info for: "
       <> showNamedTy nt
+    TIIFace _ ->
+      throw500 $ "unexpected interface type info for: "
+      <> showNamedTy nt
     TIInpObj ioti ->
       withParsed (getObject inpValParser) val $
       fmap (AGObject nt) . mapM (validateObject inpValParser ioti)
     TIEnum eti ->
       withParsed (getEnum inpValParser) val $
       fmap (AGEnum nt) . mapM (validateEnum eti)
-    TIScalar (ScalarTyInfo _ pgColTy _) ->
+    TIScalar (ScalarTyInfo _ (Right pgColTy) _) ->
       withParsed (getScalar inpValParser) val $
       fmap (AGScalar pgColTy) . mapM (validateScalar pgColTy)
+    TIScalar (ScalarTyInfo _ (Left GQTypeID) _) ->
+      withParsed (getScalar inpValParser) val $
+      fmap (AGScalarID) . mapM (runAesonParser J.parseJSON)
   where
     validateEnum enumTyInfo enumVal  =
       if Map.member enumVal (_etiValues enumTyInfo)

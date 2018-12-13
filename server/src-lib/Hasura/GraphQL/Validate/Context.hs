@@ -6,9 +6,11 @@
 
 module Hasura.GraphQL.Validate.Context
   ( ValidationCtx(..)
+  , getIFaceFieldInfo
   , getFieldInfo
   , getInpFieldInfo
   , getTyInfo
+  , getSSOTyInfo
   , getTyInfoVE
   , module Hasura.GraphQL.Utils
   ) where
@@ -30,6 +32,14 @@ getFieldInfo oti fldName =
   onNothing (Map.lookup fldName $ _otiFields oti) $ throwVE $
   "field " <> showName fldName <>
   " not found in type: " <> showNamedTy (_otiName oti)
+
+getIFaceFieldInfo
+  :: ( MonadError QErr m)
+  => IFaceTyInfo -> G.Name -> m ObjFldInfo
+getIFaceFieldInfo ifti fldName =
+  onNothing (Map.lookup fldName $ _ifFields ifti) $ throwVE $
+  "field " <> showName fldName <>
+  " not found in type: " <> showNamedTy (_ifName ifti)
 
 getInpFieldInfo
   :: ( MonadError QErr m)
@@ -61,6 +71,16 @@ getTyInfo namedTy = do
   tyMap <- asks getter
   onNothing (Map.lookup namedTy tyMap) $
     throw500 $ "type info not found for: " <> showNamedTy namedTy
+
+getSSOTyInfo
+  :: ( MonadReader r m, Has TypeMap r
+     , MonadError QErr m)
+  => G.NamedType
+  -> m SelSetObj
+getSSOTyInfo namedTy = do
+  tyInfo <- getTyInfo namedTy
+  onNothing (getSSOTyM tyInfo) $ throw500 $ "Fragments cannot be applied on type: " <> showNamedTy namedTy
+  
 
 getTyInfoVE
   :: ( MonadReader r m , Has TypeMap r

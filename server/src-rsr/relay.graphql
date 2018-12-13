@@ -1,0 +1,13 @@
+#Node interface
+interface Node {
+  #id field
+  id: ID!
+}
+
+#Pagination info
+type PageInfo {
+  hasNextPage: Boolean!
+  startCursor: String
+  endCursor: String
+}
+

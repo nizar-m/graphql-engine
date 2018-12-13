@@ -96,12 +96,14 @@ parseColExp
 parseColExp f nt n val expParser = do
   fldInfo <- getFldInfo nt n
   case fldInfo of
-    Left  pgColInfo -> do
+    TFICol  pgColInfo -> do
       opExps <- expParser val
       AVCol pgColInfo <$> traverse (traverse f) opExps
-    Right (relInfo, _, permExp, _) -> do
+    TFIRel relInfo _ permExp _ -> do
       relBoolExp <- parseBoolExp f val
       return $ AVRel relInfo $ andAnnBoolExps relBoolExp permExp
+    --TODO Nizar
+    TFIRowId t pcols -> undefined t pcols
 
 parseBoolExp
   :: (MonadError QErr m, MonadReader r m, Has FieldMap r)

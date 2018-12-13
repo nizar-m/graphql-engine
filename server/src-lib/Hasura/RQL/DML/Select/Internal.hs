@@ -71,6 +71,8 @@ data AnnRel
 
 type AnnAggSel = AnnSelG [(T.Text, TableAggFld)]
 
+type AnnConnSel = AnnSelG [(T.Text, TableConnFld)]
+
 data AggSel
   = AggSel
   { agColMapping :: ![(PGCol, PGCol)]
@@ -80,6 +82,7 @@ data AggSel
 data AnnFld
   = FCol !PGColInfo
   | FExp !T.Text
+  | FSQLExp !S.SQLExp
   | FRel !AnnRel
   | FAgg !AggSel
   deriving (Show, Eq)
@@ -113,9 +116,18 @@ data AggFld
   = AFCount !S.CountType
   | AFOp !AggOp
   | AFExp !T.Text
+
   deriving (Show, Eq)
 
 type AggFlds = [(T.Text, AggFld)]
+
+data TableConnFld
+  = TCFHasNextPage
+  | TCFHasPreviousPage
+  | TCFFirstCursor
+  | TCFLastCursor
+  | TCFCursor
+  | TCFNodes ![(FieldName, AnnFld)]
 
 data TableAggFld
   = TAFAgg !AggFlds
@@ -291,6 +303,7 @@ buildJsonObject pfx parAls flds =
       FCol col    -> toJSONableExp (pgiType col) $
                      S.mkQIdenExp (mkBaseTableAls pfx) $ pgiName col
       FExp e      -> S.SELit e
+      FSQLExp e   -> e
       FRel annRel ->
         let qual = case arType annRel of
               ObjRel -> mkObjRelTableAls pfx $ arName annRel

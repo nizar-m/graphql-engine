@@ -12,6 +12,7 @@ import           Data.Aeson
 import           Data.Has
 import           Hasura.Prelude
 
+import           Control.Lens                        (preview)
 import qualified Data.HashMap.Strict                 as Map
 import qualified Data.HashSet                        as Set
 import qualified Data.Text                           as T
@@ -23,15 +24,19 @@ import           Hasura.RQL.Types.BoolExp
 import           Hasura.RQL.Types.Common
 import           Hasura.RQL.Types.Permission
 import           Hasura.SQL.Types
-
-
+  
 type OpCtxMap = Map.HashMap G.Name OpCtx
+
 
 data OpCtx
   -- table, req hdrs
   = OCInsert QualifiedTable [T.Text]
   -- tn, filter exp, limit, req hdrs
   | OCSelect QualifiedTable AnnBoolExpSQL (Maybe Int) [T.Text]
+  -- Relay connections tn, filter exp, limit, req hdrs
+  | OCSelectConn QualifiedTable AnnBoolExpSQL (Maybe Int) [T.Text]
+  -- Mapping between table name and the name of Field with SelectPkey context
+  | OCSelectNode (Map.HashMap QualifiedTable G.Name)
   -- tn, filter exp, reqt hdrs
   | OCSelectPkey QualifiedTable AnnBoolExpSQL [T.Text]
   -- tn, filter exp, limit, req hdrs
@@ -134,10 +139,11 @@ mkHsraObjFldInfo descM name params ty =
 mkHsraObjTyInfo
   :: Maybe G.Description
   -> G.NamedType
+  -> [G.NamedType]
   -> ObjFieldMap
   -> ObjTyInfo
-mkHsraObjTyInfo descM ty flds =
-  mkObjTyInfo descM ty flds HasuraType
+mkHsraObjTyInfo descM ty ifaces flds =
+  mkObjTyInfo descM ty ifaces flds HasuraType
 
 mkHsraInpTyInfo
   :: Maybe G.Description
@@ -156,7 +162,7 @@ mkHsraEnumTyInfo descM ty enumVals =
   EnumTyInfo descM ty enumVals HasuraType
 
 mkHsraScalarTyInfo :: PGColType -> ScalarTyInfo
-mkHsraScalarTyInfo ty = ScalarTyInfo Nothing ty HasuraType
+mkHsraScalarTyInfo ty = ScalarTyInfo Nothing (Right ty) HasuraType
 
 fromInpValL :: [InpValInfo] -> Map.HashMap G.Name InpValInfo
 fromInpValL = mapFromL _iviName
@@ -269,10 +275,10 @@ defaultTypes = $(fromSchemaDocQ defaultSchema HasuraType)
 mkGCtx :: TyAgg -> RootFlds -> InsCtxMap -> GCtx
 mkGCtx (TyAgg tyInfos fldInfos ordByEnums) (RootFlds flds) insCtxMap =
   let queryRoot = mkHsraObjTyInfo (Just "query root")
-                  (G.NamedType "query_root") $
+                  (G.NamedType "query_root") [] $
                   mapFromL _fiName (schemaFld:typeFld:qFlds)
       colTys    = Set.toList $ Set.fromList $ map pgiType $
-                  lefts $ Map.elems fldInfos
+                  mapMaybe (preview _TFICol) $ Map.elems fldInfos
       scalarTys = map (TIScalar . mkHsraScalarTyInfo) colTys
       compTys   = map (TIInpObj . mkCompExpInp) colTys
       ordByEnumTyM = bool (Just ordByEnumTy) Nothing $ null qFlds
@@ -288,12 +294,12 @@ mkGCtx (TyAgg tyInfos fldInfos ordByEnums) (RootFlds flds) insCtxMap =
      (Map.map fst flds) insCtxMap
   where
     mkMutRoot =
-      mkHsraObjTyInfo (Just "mutation root") (G.NamedType "mutation_root") .
+      mkHsraObjTyInfo (Just "mutation root") (G.NamedType "mutation_root") [] .
       mapFromL _fiName
     mutRootM = bool (Just $ mkMutRoot mFlds) Nothing $ null mFlds
     mkSubRoot =
       mkHsraObjTyInfo (Just "subscription root")
-      (G.NamedType "subscription_root") . mapFromL _fiName
+      (G.NamedType "subscription_root") [] . mapFromL _fiName
     subRootM = bool (Just $ mkSubRoot qFlds) Nothing $ null qFlds
     (qFlds, mFlds) = partitionEithers $ map snd $ Map.elems flds
     schemaFld = mkHsraObjFldInfo Nothing "__schema" Map.empty $

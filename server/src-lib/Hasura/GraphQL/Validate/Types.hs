@@ -9,10 +9,15 @@
 module Hasura.GraphQL.Validate.Types
   ( InpValInfo(..)
   , ParamMap
+  , IFaceTyInfo(..)
   , ObjFldInfo(..)
   , ObjFieldMap
   , ObjTyInfo(..)
+  , SelSetObj(..)
+  , selSetTyName
   , mkObjTyInfo
+  , getPossibleObjTy
+  , getPossibleObjTy'
   , FragDef(..)
   , FragDefMap
   , AnnVarVals
@@ -25,11 +30,16 @@ module Hasura.GraphQL.Validate.Types
   , defaultDirectives
   , defDirectivesMap
   , defaultSchema
+  , relaySchema
+  , GQType(..)
   , TypeInfo(..)
   , isObjTy
+  , isIFaceTy
   , getObjTyM
+  , getSSOTyM
   , mkScalarTy
   , pgColTyToScalar
+  , gqTyToScalar
   , pgColValToAnnGVal
   , getNamedTy
   , mkTyInfoMap
@@ -62,6 +72,21 @@ import           Hasura.RQL.Instances          ()
 import           Hasura.RQL.Types.RemoteSchema
 import           Hasura.SQL.Types
 import           Hasura.SQL.Value
+
+--TODO
+data IFaceTyInfo
+  = IFaceTyInfo
+  { _ifDesc   :: !(Maybe G.Description)
+  , _ifName   :: !G.NamedType
+  , _ifFields :: !ObjFieldMap
+  } deriving (Show, Eq, TH.Lift)
+
+fromIfaceDef :: G.InterfaceTypeDefinition -> TypeLoc -> IFaceTyInfo
+fromIfaceDef (G.InterfaceTypeDefinition descM n _ flds) loc =
+  mkIFaceTyInfo descM (G.NamedType n) fldMap loc
+  where
+    fldMap = Map.fromList [(G._fldName fld, fromFldDef fld loc) | fld <- flds]
+
 
 data EnumValInfo
   = EnumValInfo
@@ -130,13 +155,14 @@ type ObjFieldMap = Map.HashMap G.Name ObjFldInfo
 
 data ObjTyInfo
   = ObjTyInfo
-  { _otiDesc   :: !(Maybe G.Description)
-  , _otiName   :: !G.NamedType
-  , _otiFields :: !ObjFieldMap
+  { _otiDesc       :: !(Maybe G.Description)
+  , _otiName       :: !G.NamedType
+  , _otiImplIfaces :: [G.NamedType]
+  , _otiFields     :: !ObjFieldMap
   } deriving (Show, Eq, TH.Lift)
 
 instance Monoid ObjTyInfo where
-  mempty = ObjTyInfo Nothing (G.NamedType "") Map.empty
+  mempty = ObjTyInfo Nothing (G.NamedType "") [] Map.empty
 
 instance Semigroup ObjTyInfo where
   objA <> objB =
@@ -144,9 +170,14 @@ instance Semigroup ObjTyInfo where
          }
 
 mkObjTyInfo
-  :: Maybe G.Description -> G.NamedType -> ObjFieldMap -> TypeLoc -> ObjTyInfo
-mkObjTyInfo descM ty flds loc =
-  ObjTyInfo descM ty $ Map.insert (_fiName newFld) newFld flds
+  :: Maybe G.Description -> G.NamedType -> [G.NamedType] -> ObjFieldMap -> TypeLoc -> ObjTyInfo
+mkObjTyInfo descM ty ifaces flds loc =
+  ObjTyInfo descM ty ifaces $ Map.insert (_fiName newFld) newFld flds
+  where newFld = typenameFld loc
+
+mkIFaceTyInfo :: Maybe G.Description -> G.NamedType -> Map.HashMap G.Name ObjFldInfo -> TypeLoc -> IFaceTyInfo
+mkIFaceTyInfo descM ty flds loc =
+  IFaceTyInfo descM ty $ Map.insert (_fiName newFld) newFld flds
   where newFld = typenameFld loc
 
 typenameFld :: TypeLoc -> ObjFldInfo
@@ -157,8 +188,8 @@ typenameFld loc =
     desc = "The name of the current Object type at runtime"
 
 fromObjTyDef :: G.ObjectTypeDefinition -> TypeLoc -> ObjTyInfo
-fromObjTyDef (G.ObjectTypeDefinition descM n _ _ flds) loc =
-  mkObjTyInfo descM (G.NamedType n) fldMap loc
+fromObjTyDef (G.ObjectTypeDefinition descM n ifaces _ flds) loc =
+  mkObjTyInfo descM (G.NamedType n) ifaces fldMap loc
   where
     fldMap = Map.fromList [(G._fldName fld, fromFldDef fld loc) | fld <- flds]
 
@@ -179,10 +210,13 @@ fromInpObjTyDef (G.InputObjectTypeDefinition descM n _ inpFlds) loc =
     fldMap = Map.fromList
       [(G._ivdName inpFld, fromInpValDef inpFld) | inpFld <- inpFlds]
 
+data GQType = GQTypeID
+  deriving (Show, Eq, TH.Lift)
+
 data ScalarTyInfo
   = ScalarTyInfo
   { _stiDesc :: !(Maybe G.Description)
-  , _stiType :: !PGColType
+  , _stiType :: !(Either GQType PGColType)
   , _stiLoc  :: !TypeLoc
   } deriving (Show, Eq, TH.Lift)
 
@@ -194,31 +228,53 @@ fromScalarTyDef (G.ScalarTypeDefinition descM n _) loc =
   ScalarTyInfo descM <$> ty <*> pure loc
   where
     ty = case n of
-      "Int"     -> return PGInteger
-      "Float"   -> return PGFloat
-      "String"  -> return PGText
-      "Boolean" -> return PGBoolean
+      "Int"     -> return $ Right  PGInteger
+      "Float"   -> return $ Right PGFloat
+      "String"  -> return $ Right PGText
+      "Boolean" -> return $ Right PGBoolean
       -- TODO: is this correct?
-      "ID"      -> return $ PGUnknown "ID" --PGText
+      "ID"      -> return $ Left GQTypeID --PGText
       -- FIXME: is this correct for hasura scalar also?
-      _         -> return $ PGUnknown $ G.unName n --throwError $ "unexpected type: " <> G.unName n
+      _         -> return $ Right $ PGUnknown $ G.unName n --throwError $ "unexpected type: " <> G.unName n
 
 data TypeInfo
   = TIScalar !ScalarTyInfo
   | TIObj !ObjTyInfo
   | TIEnum !EnumTyInfo
   | TIInpObj !InpObjTyInfo
+  | TIIFace !IFaceTyInfo
   deriving (Show, Eq, TH.Lift)
+
+-- Object types that can appear in a selection set
+data SelSetObj
+  = SSOObj !ObjTyInfo
+  | SSOIFace !IFaceTyInfo
+  deriving (Show, Eq)
+
+selSetTyName :: SelSetObj -> G.NamedType
+selSetTyName (SSOObj obj) = _otiName obj
+selSetTyName (SSOIFace i) = _ifName i
 
 isObjTy :: TypeInfo -> Bool
 isObjTy = \case
   (TIObj _) -> True
   _         -> False
 
+isIFaceTy :: TypeInfo -> Bool
+isIFaceTy = \case
+  (TIIFace _) -> True
+  _         -> False
+  
 getObjTyM :: TypeInfo -> Maybe ObjTyInfo
 getObjTyM = \case
   (TIObj t) -> return t
   _         -> Nothing
+
+getSSOTyM :: TypeInfo -> Maybe SelSetObj
+getSSOTyM = \case
+  TIObj t -> return $ SSOObj t
+  TIIFace i -> return $ SSOIFace i
+  _ -> Nothing
 
 -- map postgres types to builtin scalars
 pgColTyToScalar :: PGColType -> Text
@@ -230,16 +286,23 @@ pgColTyToScalar = \case
   PGVarchar -> "String"
   t         -> T.pack $ show t
 
+gqTyToScalar :: GQType -> Text
+gqTyToScalar GQTypeID = "ID"
+
+mkScalarGQTy :: GQType -> G.NamedType
+mkScalarGQTy GQTypeID = G.NamedType $ G.Name "ID"
+
 mkScalarTy :: PGColType -> G.NamedType
 mkScalarTy =
   G.NamedType . G.Name . pgColTyToScalar
 
 getNamedTy :: TypeInfo -> G.NamedType
 getNamedTy = \case
-  TIScalar t -> mkScalarTy $ _stiType t
+  TIScalar t -> either mkScalarGQTy mkScalarTy $ _stiType t
   TIObj t -> _otiName t
   TIEnum t -> _etiName t
   TIInpObj t -> _iotiName t
+  TIIFace t -> _ifName t
 
 mkTyInfoMap :: [TypeInfo] -> TypeMap
 mkTyInfoMap tyInfos =
@@ -250,7 +313,8 @@ fromTyDef tyDef loc = case tyDef of
   G.TypeDefinitionScalar t -> TIScalar <$> fromScalarTyDef t loc
   G.TypeDefinitionObject t -> return $ TIObj $ fromObjTyDef t loc
   G.TypeDefinitionInterface t ->
-    throwError $ "unexpected interface: " <> showName (G._itdName t)
+    return $ TIIFace $ fromIfaceDef t loc
+    --throwError $ "unexpected interface: " <> showName (G._itdName t)
   G.TypeDefinitionUnion t ->
     throwError $ "unexpected union: " <> showName (G._utdName t)
   G.TypeDefinitionEnum t -> return $ TIEnum $ fromEnumTyDef t loc
@@ -265,14 +329,33 @@ fromSchemaDocQ :: G.SchemaDocument -> TypeLoc -> TH.Q TH.Exp
 fromSchemaDocQ (G.SchemaDocument tyDefs) loc =
   TH.ListE <$> mapM (flip fromTyDefQ loc) tyDefs
 
+
 defaultSchema :: G.SchemaDocument
 defaultSchema = $(G.parseSchemaDocQ "src-rsr/schema.graphql")
 
+relaySchema :: G.SchemaDocument
+relaySchema = $( G.parseSchemaDocQ "src-rsr/relay.graphql" )
 -- fromBaseSchemaFileQ :: FilePath -> TH.Q TH.Exp
 -- fromBaseSchemaFileQ fp =
 --   fromSchemaDocQ $(G.parseSchemaDocQ fp)
 
 type TypeMap = Map.HashMap G.NamedType TypeInfo
+
+getPossibleObjTy :: TypeInfo -> [TypeInfo] -> [ObjTyInfo]
+getPossibleObjTy TIScalar{} = const []
+getPossibleObjTy TIEnum{} = const []
+getPossibleObjTy TIInpObj{} = const []
+getPossibleObjTy (TIObj obj) = getPossibleObjTy' (SSOObj obj)
+getPossibleObjTy (TIIFace obj) = getPossibleObjTy' (SSOIFace obj)
+
+getPossibleObjTy' :: SelSetObj -> [TypeInfo] -> [ObjTyInfo]
+getPossibleObjTy' (SSOObj obj) _ = [obj]
+getPossibleObjTy' (SSOIFace i) allTy = mapMaybe getImplTypeM allTy
+  where
+    getImplTypeM = \case
+      TIObj objTyInfo -> bool Nothing (Just objTyInfo) $
+         _ifName i `elem` _otiImplIfaces objTyInfo
+      _               -> Nothing
 
 data DirectiveInfo
   = DirectiveInfo
@@ -300,7 +383,8 @@ defDirectivesMap = mapFromL _diName defaultDirectives
 data FragDef
   = FragDef
   { _fdName   :: !G.Name
-  , _fdTyInfo :: !ObjTyInfo
+    --Fragments can be on objects, interfaces and unions
+  , _fdTy     :: !G.NamedType
   , _fdSelSet :: !G.SelectionSet
   } deriving (Show, Eq)
 
@@ -312,7 +396,8 @@ type AnnVarVals =
 type AnnGObject = OMap.InsOrdHashMap G.Name AnnGValue
 
 data AnnGValue
-  = AGScalar !PGColType !(Maybe PGColValue)
+  = AGScalarID !(Maybe Text)
+  | AGScalar !PGColType !(Maybe PGColValue)
   | AGEnum !G.NamedType !(Maybe G.EnumValue)
   | AGObject !G.NamedType !(Maybe AnnGObject)
   | AGArray !G.ListType !(Maybe [AnnGValue])
@@ -337,6 +422,7 @@ hasNullVal = \case
 
 getAnnInpValKind :: AnnGValue -> Text
 getAnnInpValKind = \case
+  AGScalarID _ -> "scalar"
   AGScalar _ _ -> "scalar"
   AGEnum _ _   -> "enum"
   AGObject _ _ -> "object"
@@ -344,6 +430,7 @@ getAnnInpValKind = \case
 
 getAnnInpValTy :: AnnGValue -> G.GType
 getAnnInpValTy = \case
+  AGScalarID _ -> G.TypeNamed (G.Nullability True) $ G.NamedType $ G.Name "ID"
   AGScalar pct _ -> G.TypeNamed (G.Nullability True) $ G.NamedType $ G.Name $ T.pack $ show pct
   AGEnum nt _    -> G.TypeNamed (G.Nullability True) nt
   AGObject nt _  -> G.TypeNamed (G.Nullability True) nt

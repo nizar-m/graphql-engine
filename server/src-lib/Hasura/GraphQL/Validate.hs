@@ -110,9 +110,9 @@ validateFrag (G.FragmentDefinition n onTy dirs selSet) = do
   unless (null dirs) $ throwVE
     "unexpected directives at fragment definition"
   tyInfo <- getTyInfoVE onTy
-  objTyInfo <- onNothing (getObjTyM tyInfo) $ throwVE
-    "fragments can only be defined on object types"
-  return $ FragDef n objTyInfo selSet
+  objTyInfo <- onNothing (getSSOTyM tyInfo) $ throwVE
+    "fragments can only be defined on object and interface types"
+  return $ FragDef n (selSetTyName objTyInfo) selSet
 
 -- {-# SCC validateGQ #-}
 validateGQ
@@ -147,13 +147,14 @@ validateGQ (QueryParts opDef opRoot fragDefsL varValsM) = do
   -- build a validation ctx
   let valCtx = ValidationCtx (_gTypes ctx) annVarVals annFragDefs
 
-  selSet <- flip runReaderT valCtx $ denormSelSet [] opRoot $
+  (selSet, condSelSet) <- flip runReaderT valCtx $ denormSelSet [] (SSOObj opRoot) $
             G._todSelectionSet opDef
+  unless (null condSelSet) $ throw500 $ "Conditional selection set should not be present at the operation root"
   return (G._todType opDef, selSet)
 
 
 getQueryParts
-  :: ( MonadError QErr m, MonadReader GCtx m)
+  :: (MonadError QErr m, MonadReader GCtx m)
   => GraphQLRequest
   -> m QueryParts
 getQueryParts (GraphQLRequest opNameM q varValsM) = do

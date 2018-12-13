@@ -7,6 +7,7 @@
 module Hasura.RQL.DML.Select
   ( selectP2
   , selectAggP2
+  , selectConnP2
   , mkSQLSelect
   , mkAggSelect
   , convSelectQuery
@@ -243,6 +244,7 @@ partAnnFlds flds =
   partitionEithers $ catMaybes $ flip map flds $ \case
   FCol c -> Just $ Left (pgiName c, pgiType c)
   FRel r -> Just $ Right r
+  FSQLExp _ -> Nothing
   FAgg _ -> Nothing
   FExp _ -> Nothing
 
@@ -278,6 +280,9 @@ convSelectQuery prepArgBuilder (DMLQuery qt selQ) = do
   validateHeaders $ spiRequiredHeaders selPermInfo
   convSelectQ (tiFieldInfoMap tabInfo) selPermInfo extSelQ prepArgBuilder
 
+mkConnSelect :: AnnConnSel -> S.Select
+mkConnSelect = undefined
+
 mkAggSelect :: AnnAggSel -> S.Select
 mkAggSelect annAggSel =
   prefixNumToAliases $ aggNodeToSelect bn extr $ S.BELit True
@@ -286,6 +291,13 @@ mkAggSelect annAggSel =
     AggNode _ extr bn =
       aggSelToAggNode (Iden "root") (FieldName "root") aggSel
 
+selectConnP2 :: (AnnConnSel, DS.Seq Q.PrepArg) -> Q.TxE QErr RespBody
+selectConnP2 (sel, p) =
+  runIdentity . Q.getRow
+  <$> Q.rawQE dmlTxErrorHandler (Q.fromBuilder selectSQL) (toList p) True
+  where
+    selectSQL = toSQL $ mkConnSelect sel
+    
 selectAggP2 :: (AnnAggSel, DS.Seq Q.PrepArg) -> Q.TxE QErr RespBody
 selectAggP2 (sel, p) =
   runIdentity . Q.getRow
