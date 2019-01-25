@@ -75,6 +75,15 @@ class TestRemoteSchemaBasic:
         hge_ctx.v1q({"type": "remove_remote_schema", "args": {"name": "my remote"}})
         assert st_code == 200, resp
 
+    def test_remote_schema_default_values(self, hge_ctx):
+        q = mk_add_remote_q('my remote', 'http://localhost:5000/echo-graphql')
+        st_code, resp = hge_ctx.v1q(q)
+        assert st_code == 200, resp
+        with open('queries/graphql_introspection/introspection.yaml') as f:
+            query = yaml.load(f)
+        st_code, resp = check_query(hge_ctx, query)
+        assert st_code == 200, resp
+
     def test_bulk_remove_add_remote_schema(self, hge_ctx):
         st_code, resp = hge_ctx.v1q_f(self.dir + '/basic_bulk_remove_add.yaml')
         assert st_code == 200, resp
