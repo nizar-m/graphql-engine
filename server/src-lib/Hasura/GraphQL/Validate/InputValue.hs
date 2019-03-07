@@ -36,13 +36,14 @@ pVal = return . P . Just . Right
 resolveVar
   :: ( MonadError QErr m
      , MonadReader ValidationCtx m)
-  => G.Variable -> m AnnGValue
+  => G.Variable -> m (Maybe AnnGValue)
 resolveVar var = do
-  varVals <- _vcVarVals <$> ask
+  --varVals <- _vcVarVals <$> ask
+  fmap (Map.lookup var . _vcVarVals) ask
   -- TODO typecheck
-  onNothing (Map.lookup var varVals) $
-    throwVE $ "no such variable defined in the operation: "
-    <> showName (G.unVariable var)
+  --onNothing (Map.lookup var varVals) $
+  --throwVE $ "no such variable defined in the operation: "
+  -- <> showName (G.unVariable var)
   where
     typeCheck expectedTy actualTy = case (expectedTy, actualTy) of
       -- named types
@@ -57,7 +58,7 @@ pVar
   => G.Variable -> m (P a)
 pVar var = do
   annInpVal <- resolveVar var
-  return . P . Just . Left $ annInpVal
+  return $ P $ fmap Left annInpVal
 
 data InputValueParser a m
   = InputValueParser
@@ -83,7 +84,7 @@ jsonParser =
     jObject J.Null       = pNull
     jObject _            = throwVE "expecting a JSON object"
 
-    jScalar J.Null = pNull
+    jScalar J.Null = pVal J.Null
     jScalar v      = pVal v
 
 toJValue :: (MonadError QErr m) => G.Value -> m J.Value
@@ -128,7 +129,7 @@ valueParser =
 
     -- scalar json
     pScalar (G.VVariable var) = pVar var
-    pScalar G.VNull           = pNull
+    pScalar G.VNull           = pVal J.Null
     pScalar (G.VInt v)        = pVal $ J.Number $ fromIntegral v
     pScalar (G.VFloat v)      = pVal $ J.Number $ fromFloatDigits v
     pScalar (G.VBoolean b)    = pVal $ J.Bool b
@@ -185,7 +186,7 @@ constValueParser =
     pObject _                    = throwVE "expecting an object"
 
     -- scalar json
-    pScalar G.VCNull        = pNull
+    pScalar G.VCNull        = pVal $ J.Null
     pScalar (G.VCInt v)     = pVal $ J.Number $ fromIntegral v
     pScalar (G.VCFloat v)   = pVal $ J.Number $ fromFloatDigits v
     pScalar (G.VCBoolean b) = pVal $ J.Bool b

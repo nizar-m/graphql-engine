@@ -75,21 +75,23 @@ getAnnVarVals varDefsL inpVals = do
     throwVE $ "unexpected variables in variableValues: " <>
     showVars unexpectedVars
 
-  forM varDefs $ \(G.VariableDefinition var ty defM) -> do
+  fmap (Map.mapMaybe id) $ forM varDefs $ \(G.VariableDefinition var ty defM) -> do
     let baseTy = getBaseTy ty
     baseTyInfo <- getTyInfoVE baseTy
     -- check that the variable is defined on input types
     when (isObjTy baseTyInfo) $ throwVE $ objTyErrMsg baseTy
 
-    let defM' = bool (defM <|> Just G.VCNull) defM $ G.isNotNull ty
+    let defM' = bool defM (defM <|> Just G.VCNull) $ G.isNotNull ty
     annDefM <- withPathK "defaultValue" $
                mapM (validateInputValue constValueParser ty) defM'
     let inpValM = Map.lookup var inpVals
     annInpValM <- withPathK "variableValues" $
                   mapM (validateInputValue jsonParser ty) inpValM
     let varValM = annInpValM <|> annDefM
-    onNothing varValM $ throwVE $ "expecting a value for non-null type: "
+    when (isNothing varValM && G.isNotNull ty) $
+      throwVE $ "expecting a value for non-null type: "
       <> G.showGT ty <> " in variableValues"
+    return varValM
   where
     objTyErrMsg namedTy =
       "variables can only be defined on input types"

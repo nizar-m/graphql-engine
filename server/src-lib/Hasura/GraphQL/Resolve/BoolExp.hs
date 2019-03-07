@@ -26,44 +26,44 @@ parseOpExps
 parseOpExps annVal = do
   opExpsM <- flip withObjectM annVal $ \nt objM -> forM objM $ \obj ->
     forM (OMap.toList obj) $ \(k, v) -> case k of
-      "_eq"           -> fmap (AEQ True) <$> asPGColValM v
-      "_ne"           -> fmap (ANE True) <$> asPGColValM v
-      "_neq"          -> fmap (ANE True) <$> asPGColValM v
+      "_eq"           -> fmap (AEQ True) $ asPGColVal v
+      "_ne"           -> fmap (ANE True) $ asPGColVal v
+      "_neq"          -> fmap (ANE True) $ asPGColVal v
       "_is_null"      -> resolveIsNull v
 
-      "_in"           -> fmap (AIN . catMaybes) <$> parseMany asPGColValM v
-      "_nin"          -> fmap (ANIN . catMaybes) <$> parseMany asPGColValM v
+      "_in"           -> fmap (AIN . catMaybes) $ parseMany asPGColValM v
+      "_nin"          -> fmap (ANIN . catMaybes) $ parseMany asPGColValM v
 
-      "_gt"           -> fmap AGT <$> asPGColValM v
-      "_lt"           -> fmap ALT <$> asPGColValM v
-      "_gte"          -> fmap AGTE <$> asPGColValM v
-      "_lte"          -> fmap ALTE <$> asPGColValM v
+      "_gt"           -> fmap AGT $ asPGColVal v
+      "_lt"           -> fmap ALT $ asPGColVal v
+      "_gte"          -> fmap AGTE $ asPGColVal v
+      "_lte"          -> fmap ALTE $ asPGColVal v
 
-      "_like"         -> fmap ALIKE <$> asPGColValM v
-      "_nlike"        -> fmap ANLIKE <$> asPGColValM v
+      "_like"         -> fmap ALIKE $ asPGColVal v
+      "_nlike"        -> fmap ANLIKE $ asPGColVal v
 
-      "_ilike"        -> fmap AILIKE <$> asPGColValM v
-      "_nilike"       -> fmap ANILIKE <$> asPGColValM v
+      "_ilike"        -> fmap AILIKE $ asPGColVal v
+      "_nilike"       -> fmap ANILIKE $ asPGColVal v
 
-      "_similar"      -> fmap ASIMILAR <$> asPGColValM v
-      "_nsimilar"     -> fmap ANSIMILAR <$> asPGColValM v
+      "_similar"      -> fmap ASIMILAR $ asPGColVal v
+      "_nsimilar"     -> fmap ANSIMILAR $ asPGColVal v
 
       -- jsonb related operators
-      "_contains"     -> fmap AContains <$> asPGColValM v
-      "_contained_in" -> fmap AContainedIn <$> asPGColValM v
-      "_has_key"      -> fmap AHasKey <$> asPGColValM v
-      "_has_keys_any" -> fmap AHasKeysAny <$> parseMany asPGColText v
-      "_has_keys_all" -> fmap AHasKeysAll <$> parseMany asPGColText v
+      "_contains"     -> fmap AContains $ asPGColVal v
+      "_contained_in" -> fmap AContainedIn $ asPGColVal v
+      "_has_key"      -> fmap AHasKey $ asPGColVal v
+      "_has_keys_any" -> fmap AHasKeysAny $ parseMany asPGColText v
+      "_has_keys_all" -> fmap AHasKeysAll $ parseMany asPGColText v
 
       -- geometry type related operators
-      "_st_contains"    -> fmap ASTContains <$> asPGColValM v
-      "_st_crosses"     -> fmap ASTCrosses <$> asPGColValM v
-      "_st_equals"      -> fmap ASTEquals <$> asPGColValM v
-      "_st_intersects"  -> fmap ASTIntersects <$> asPGColValM v
-      "_st_overlaps"    -> fmap ASTOverlaps <$> asPGColValM v
-      "_st_touches"     -> fmap ASTTouches <$> asPGColValM v
-      "_st_within"      -> fmap ASTWithin <$> asPGColValM v
-      "_st_d_within"    -> asObjectM v >>= mapM parseAsSTDWithinObj
+      "_st_contains"    -> fmap ASTContains $ asPGColVal v
+      "_st_crosses"     -> fmap ASTCrosses $ asPGColVal v
+      "_st_equals"      -> fmap ASTEquals $ asPGColVal v
+      "_st_intersects"  -> fmap ASTIntersects $ asPGColVal v
+      "_st_overlaps"    -> fmap ASTOverlaps $ asPGColVal v
+      "_st_touches"     -> fmap ASTTouches $ asPGColVal v
+      "_st_within"      -> fmap ASTWithin $ asPGColVal v
+      "_st_d_within"    -> asObject v >>= parseAsSTDWithinObj
 
       _ ->
         throw500
@@ -71,12 +71,12 @@ parseOpExps annVal = do
           <> showNamedTy nt
           <> ": "
           <> showName k
-  return $ catMaybes $ fromMaybe [] opExpsM
+  return $ fromMaybe [] opExpsM
   where
     resolveIsNull v = case v of
-      AGScalar _ Nothing -> return Nothing
+      --AGScalar _ Nothing -> return Nothing
       AGScalar _ (Just (PGValBoolean b)) ->
-        return $ Just $ bool ANISNOTNULL ANISNULL b
+        return $ bool ANISNOTNULL ANISNULL b
       AGScalar _ _ -> throw500 "boolean value is expected"
       _ -> tyMismatch "pgvalue" v
 
@@ -117,9 +117,9 @@ parseBoolExp f annGVal = do
   boolExpsM <-
     flip withObjectM annGVal
       $ \nt objM -> forM objM $ \obj -> forM (OMap.toList obj) $ \(k, v) -> if
-          | k == "_or"  -> BoolOr . fromMaybe []
+          | k == "_or"  -> BoolOr
                            <$> parseMany (parseBoolExp f) v
-          | k == "_and" -> BoolAnd . fromMaybe []
+          | k == "_and" -> BoolAnd
                            <$> parseMany (parseBoolExp f) v
           | k == "_not" -> BoolNot <$> parseBoolExp f v
           | otherwise   -> BoolFld <$> parseColExp f nt k v

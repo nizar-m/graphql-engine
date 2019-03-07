@@ -46,11 +46,11 @@ convertRowObj
   => AnnGValue
   -> m [(PGCol, S.SQLExp)]
 convertRowObj val =
-  flip withObject val $ \_ obj ->
+  flip withObject val $ \_ obj -> fmap catMaybes $
   forM (OMap.toList obj) $ \(k, v) -> do
     prepExpM <- asPGColValM v >>= mapM prepare
-    let prepExp = fromMaybe (S.SEUnsafe "NULL") prepExpM
-    return (PGCol $ G.unName k, prepExp)
+    --let prepExp = fromMaybe (S.SEUnsafe "NULL") prepExpM
+    return $ (,) (PGCol $ G.unName k)  <$> prepExpM
 
 type ApplySQLOp =  (PGCol, S.SQLExp) -> S.SQLExp
 

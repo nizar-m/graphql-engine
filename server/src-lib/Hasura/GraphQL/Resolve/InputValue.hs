@@ -116,9 +116,9 @@ asArray = withArray (\_ vals -> return vals)
 
 parseMany
   :: (MonadError QErr m)
-  => (AnnGValue -> m a) -> AnnGValue -> m (Maybe [a])
+  => (AnnGValue -> m a) -> AnnGValue -> m [a]
 parseMany fn v = case v of
-  AGArray _ arrM -> mapM (mapM fn) arrM
+  AGArray _ (Just arr) -> mapM fn arr
   _              -> tyMismatch "array" v
 
 asPGColText
