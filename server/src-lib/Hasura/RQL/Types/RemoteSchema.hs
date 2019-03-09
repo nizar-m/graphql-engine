@@ -38,7 +38,6 @@ data RemoteSchemaDef
 $(J.deriveJSON (J.aesonDrop 4 J.snakeCase) ''RemoteSchemaDef)
 
 type RemoteSchemaMap = Map.HashMap RemoteSchemaName RemoteSchemaInfo
-
 -- instance J.ToJSON RemoteSchemaDef where
 --   toJSON (RemoteSchemaDef name eUrlVal headers fwdHdrs) =
 --     case eUrlVal of
@@ -72,6 +71,8 @@ $(J.deriveJSON (J.aesonDrop 5 J.snakeCase) ''AddRemoteSchemaQuery)
 --   , _arsqHeaders              :: !(Maybe [HeaderConf])
 --   , _arsqForwardClientHeaders :: !Bool
 --   } deriving (Show, Eq, Lift)
+
+type ReloadRemoteSchemaQuery = RemoveRemoteSchemaQuery
 
 data RemoveRemoteSchemaQuery
   = RemoveRemoteSchemaQuery

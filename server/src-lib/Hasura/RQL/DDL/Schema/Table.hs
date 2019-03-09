@@ -77,7 +77,7 @@ trackExistingTableOrViewP2Setup tn isSystemDefined = do
   addTableToCache ti
 
 trackExistingTableOrViewP2
-  :: (QErrM m, CacheRWM m, MonadTx m, MonadIO m, HasHttpManager m)
+  :: (QErrM m, CacheRWM m, MonadTx m)
   => QualifiedTable -> Bool -> m RespBody
 trackExistingTableOrViewP2 vn isSystemDefined = do
   sc <- askSchemaCache
@@ -96,7 +96,7 @@ trackExistingTableOrViewP2 vn isSystemDefined = do
 
 runTrackTableQ
   :: ( QErrM m, CacheRWM m, MonadTx m
-     , MonadIO m, HasHttpManager m, UserInfoM m
+     , UserInfoM m
      )
   => TrackTable -> m RespBody
 runTrackTableQ q = do
@@ -247,7 +247,7 @@ unTrackExistingTableOrViewP1 (UntrackTable vn _) = do
       "view/table already untracked : " <>> vn
 
 unTrackExistingTableOrViewP2
-  :: (QErrM m, CacheRWM m, MonadTx m, MonadIO m, HasHttpManager m)
+  :: (QErrM m, CacheRWM m, MonadTx m)
   => UntrackTable -> m RespBody
 unTrackExistingTableOrViewP2 (UntrackTable qtn cascade) = do
   sc <- askSchemaCache
@@ -275,8 +275,8 @@ unTrackExistingTableOrViewP2 (UntrackTable qtn cascade) = do
       _                  -> False
 
 runUntrackTableQ
-  :: ( QErrM m, CacheRWM m, MonadTx m
-     , MonadIO m, HasHttpManager m, UserInfoM m
+  :: ( QErrM m, CacheRWM m
+     , MonadTx m, UserInfoM m
      )
   => UntrackTable -> m RespBody
 runUntrackTableQ q = do
@@ -351,8 +351,10 @@ buildSchemaCache = do
   remoteScConf <- forM res $ \(AddRemoteSchemaQuery n def _) ->
     (,) n <$> validateRemoteSchemaDef def
   let rmScMap = M.fromList remoteScConf
-  (mergedGCtxMap, defGCtx) <- mergeSchemas rmScMap gCtxMap hMgr
-  writeRemoteSchemasToCache mergedGCtxMap rmScMap
+  rmCtxMap <- fmap M.fromList $ forM remoteScConf $
+    \(n,i) -> (n,) <$> fetchRemoteSchema hMgr n i
+  (mergedGCtxMap, defGCtx) <- mergeSchemas rmCtxMap gCtxMap
+  writeRemoteSchemasToCache mergedGCtxMap rmScMap rmCtxMap
   postMergeSc <- askSchemaCache
   writeSchemaCache postMergeSc { scDefaultRemoteGCtx = defGCtx }
 

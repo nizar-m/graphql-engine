@@ -231,15 +231,15 @@ v1QueryHandler query = do
     dbActionReload = do
       (resp, newSc) <- dbAction
       scRef <- scCacheRef . hcServerCtx <$> ask
-      httpMgr <- scManager . hcServerCtx <$> ask
-      --FIXME: should we be fetching the remote schema again? if not how do we get the remote schema?
       newGCtxMap <- GS.mkGCtxMap (scTables newSc) (scFunctions newSc)
       (mergedGCtxMap, defGCtx) <-
-        mergeSchemas (scRemoteResolvers newSc) newGCtxMap httpMgr
-      let newSc' =
-            newSc { scGCtxMap = mergedGCtxMap, scDefaultRemoteGCtx = defGCtx }
-      liftIO $ writeIORef scRef newSc'
+        mergeSchemas (scRemoteGCtxs newSc) newGCtxMap
+      liftIO $ writeIORef scRef $ newSc
+        { scGCtxMap = mergedGCtxMap
+        , scDefaultRemoteGCtx = defGCtx
+        }
       return resp
+
 
 v1Alpha1GQHandler :: GH.GraphQLRequest -> Handler BL.ByteString
 v1Alpha1GQHandler query = do

@@ -23,9 +23,9 @@ import           Hasura.HTTP                   (wreqOptions)
 import           Hasura.RQL.DDL.Headers        (getHeadersFromConf)
 import           Hasura.RQL.Types
 
+import qualified Hasura.GraphQL.Context        as GC
 import qualified Hasura.GraphQL.Schema         as GS
 import qualified Hasura.GraphQL.Validate.Types as VT
-
 
 
 introspectionQuery :: BL.ByteString
@@ -36,7 +36,7 @@ fetchRemoteSchema
   => HTTP.Manager
   -> RemoteSchemaName
   -> RemoteSchemaInfo
-  -> m GS.RemoteGCtx
+  -> m GC.RemoteGCtx
 fetchRemoteSchema manager name def@(RemoteSchemaInfo url headerConf _) = do
   headers <- getHeadersFromConf headerConf
   let hdrs = map (\(hn, hv) -> (CI.mk . T.encodeUtf8 $ hn, T.encodeUtf8 hv)) headers
@@ -62,7 +62,7 @@ fetchRemoteSchema manager name def@(RemoteSchemaInfo url headerConf _) = do
       mRmMR = join $ VT.getObjTyM <$> mMrTyp
       mRmSR = join $ VT.getObjTyM <$> mSrTyp
   rmQR <- liftMaybe (err400 Unexpected "query root has to be an object type") mRmQR
-  return $ GS.RemoteGCtx typMap rmQR mRmMR mRmSR
+  return $ GC.RemoteGCtx typMap rmQR mRmMR mRmSR
 
   where
     noQueryRoot = err400 Unexpected "query root not found in remote schema"
@@ -74,22 +74,21 @@ fetchRemoteSchema manager name def@(RemoteSchemaInfo url headerConf _) = do
     throwHttpErr :: (MonadError QErr m) => HTTP.HttpException -> m a
     throwHttpErr = schemaErr
 
+type RemoteGCtxMap = Map.HashMap RemoteSchemaName GC.RemoteGCtx
+
 mergeSchemas
-  :: (MonadIO m, MonadError QErr m)
-  => RemoteSchemaMap
+  :: (MonadError QErr m)
+  => RemoteGCtxMap
   -> GS.GCtxMap
-  -> HTTP.Manager
   -> m (GS.GCtxMap, GS.GCtx) -- the merged GCtxMap and the default GCtx without roles
-mergeSchemas rmSchemaMap gCtxMap httpManager = do
-  remoteSchemas <- forM (Map.toList rmSchemaMap) $ \(name, def) ->
-    fetchRemoteSchema httpManager name def
-  def <- mkDefaultRemoteGCtx remoteSchemas
+mergeSchemas remoteSchemas gCtxMap = do
+  def <- mkDefaultRemoteGCtx $ Map.elems remoteSchemas
   merged <- mergeRemoteSchema gCtxMap def
   return (merged, def)
 
 mkDefaultRemoteGCtx
   :: (MonadError QErr m)
-  => [GS.RemoteGCtx] -> m GS.GCtx
+  => [GC.RemoteGCtx] -> m GS.GCtx
 mkDefaultRemoteGCtx =
   foldlM (\combG -> mergeGCtx combG . convRemoteGCtx) GS.emptyGCtx
 
@@ -125,12 +124,12 @@ mergeGCtx gCtx rmMergedGCtx = do
                          }
   return updatedGCtx
 
-convRemoteGCtx :: GS.RemoteGCtx -> GS.GCtx
+convRemoteGCtx :: GC.RemoteGCtx -> GS.GCtx
 convRemoteGCtx rmGCtx =
-  GS.emptyGCtx { GS._gTypes     = GS._rgTypes rmGCtx
-               , GS._gQueryRoot = GS._rgQueryRoot rmGCtx
-               , GS._gMutRoot   = GS._rgMutationRoot rmGCtx
-               , GS._gSubRoot   = GS._rgSubscriptionRoot rmGCtx
+  GS.emptyGCtx { GS._gTypes     = GC._rgTypes rmGCtx
+               , GS._gQueryRoot = GC._rgQueryRoot rmGCtx
+               , GS._gMutRoot   = GC._rgMutationRoot rmGCtx
+               , GS._gSubRoot   = GC._rgSubscriptionRoot rmGCtx
                }
 
 
@@ -262,7 +261,6 @@ instance J.FromJSON (FromIntrospection G.GType) where
       mkNotNull typ = case typ of
         G.TypeList _ ty -> G.TypeList (G.Nullability False) ty
         G.TypeNamed _ n -> G.TypeNamed (G.Nullability False) n
-
 
 instance J.FromJSON (FromIntrospection G.InputValueDefinition) where
   parseJSON = J.withObject "InputValueDefinition" $ \o -> do

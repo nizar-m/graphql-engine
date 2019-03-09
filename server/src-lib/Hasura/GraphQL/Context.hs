@@ -17,6 +17,7 @@ import           Hasura.RQL.Types.Permission
 import           Hasura.SQL.Types
 
 
+
 type OpCtxMap = Map.HashMap G.Name OpCtx
 
 data InsOpCtx
@@ -99,6 +100,21 @@ instance ToJSON GCtx where
   toJSON _ = String "GCtx"
 
 type GCtxMap = Map.HashMap RoleName GCtx
+
+data RemoteGCtx
+  = RemoteGCtx
+  { _rgTypes            :: !TypeMap
+  , _rgQueryRoot        :: !ObjTyInfo
+  , _rgMutationRoot     :: !(Maybe ObjTyInfo)
+  , _rgSubscriptionRoot :: !(Maybe ObjTyInfo)
+  } deriving (Show, Eq)
+
+instance ToJSON RemoteGCtx where
+  toJSON _ = String "RemoteGCtx"
+
+instance Has TypeMap RemoteGCtx where
+  getter = _rgTypes
+  modifier f ctx = ctx { _rgTypes = f $ _rgTypes ctx }
 
 data TyAgg
   = TyAgg

@@ -10,7 +10,6 @@ module Hasura.GraphQL.Schema
   , isAggFld
   , qualObjectToName
   -- Schema stitching related
-  , RemoteGCtx (..)
   , checkSchemaConflicts
   , checkConflictingNode
   , emptyGCtx
@@ -19,7 +18,6 @@ module Hasura.GraphQL.Schema
   ) where
 
 
-import           Data.Has
 import           Data.Maybe                     (maybeToList)
 
 import qualified Data.HashMap.Strict            as Map
@@ -51,18 +49,6 @@ getTabInfo
 getTabInfo tc t =
   onNothing (Map.lookup t tc) $
      throw500 $ "table not found: " <>> t
-
-data RemoteGCtx
-  = RemoteGCtx
-  { _rgTypes            :: !TypeMap
-  , _rgQueryRoot        :: !ObjTyInfo
-  , _rgMutationRoot     :: !(Maybe ObjTyInfo)
-  , _rgSubscriptionRoot :: !(Maybe ObjTyInfo)
-  } deriving (Show, Eq)
-
-instance Has TypeMap RemoteGCtx where
-  getter = _rgTypes
-  modifier f ctx = ctx { _rgTypes = f $ _rgTypes ctx }
 
 type SelField = Either PGColInfo (RelInfo, Bool, AnnBoolExpSQL, Maybe Int, Bool)
 

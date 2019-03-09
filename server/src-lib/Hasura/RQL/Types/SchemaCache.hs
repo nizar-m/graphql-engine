@@ -444,12 +444,15 @@ removeFromDepMap :: SchemaObjId -> DepMap -> DepMap
 removeFromDepMap =
   M.delete
 
+type RemoteGCtxMap = M.HashMap RemoteSchemaName GC.RemoteGCtx
+
 data SchemaCache
   = SchemaCache
   { scTables            :: !TableCache
   , scFunctions         :: !FunctionCache
   , scQTemplates        :: !QTemplateCache
   , scRemoteResolvers   :: !RemoteSchemaMap
+  , scRemoteGCtxs       :: !RemoteGCtxMap
   , scGCtxMap           :: !GC.GCtxMap
   , scDefaultRemoteGCtx :: !GC.GCtx
   , scDepMap            :: !DepMap
@@ -517,7 +520,7 @@ delQTemplateFromCache qtn = do
 
 emptySchemaCache :: SchemaCache
 emptySchemaCache =
-  SchemaCache (M.fromList []) M.empty (M.fromList []) M.empty M.empty GC.emptyGCtx mempty
+  SchemaCache (M.fromList []) M.empty (M.fromList []) M.empty M.empty M.empty GC.emptyGCtx mempty
 
 modTableCache :: (CacheRWM m) => TableCache -> m ()
 modTableCache tc = do

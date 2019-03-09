@@ -67,6 +67,7 @@ data RQLQuery
   -- schema-stitching, custom resolver related
   | RQAddRemoteSchema !AddRemoteSchemaQuery
   | RQRemoveRemoteSchema !RemoveRemoteSchemaQuery
+  | RQReloadRemoteSchema !RemoveRemoteSchemaQuery
 
   | RQCreateEventTrigger !CreateEventTriggerQuery
   | RQDeleteEventTrigger !DeleteEventTriggerQuery
@@ -83,7 +84,6 @@ data RQLQuery
   | RQExportMetadata !ExportMetadata
   | RQClearMetadata !ClearMetadata
   | RQReloadMetadata !ReloadMetadata
-
   | RQDumpInternalState !DumpInternalState
 
   deriving (Show, Eq, Lift)
@@ -170,6 +170,7 @@ queryNeedsReload qi = case qi of
   RQCount _                    -> False
 
   RQAddRemoteSchema _          -> True
+  RQReloadRemoteSchema _       -> True
   RQRemoveRemoteSchema _       -> True
 
   RQCreateEventTrigger _       -> True
@@ -231,6 +232,7 @@ runQueryM rq = withPathK "args" $ case rq of
 
   RQAddRemoteSchema    q -> runAddRemoteSchema q
   RQRemoveRemoteSchema q -> runRemoveRemoteSchema q
+  RQReloadRemoteSchema q -> runReloadRemoteSchema q
 
   RQCreateEventTrigger q -> runCreateEventTriggerQuery q
   RQDeleteEventTrigger q -> runDeleteEventTriggerQuery q
