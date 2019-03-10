@@ -507,6 +507,31 @@ class UnionGraphQLSchemaErrWrappedType(RequestHandler):
 
 #GraphQL server with default values for inputTypes
 
+modSchema = person_schema
+
+class ModSchemaGraphQL(RequestHandler):
+    def get(self, req):
+        global modSchema
+        if 'schema' in req.qs and len(req.qs['schema']) > 0:
+            schema = req.qs['schema'][0]
+            if schema == 'interface':
+                modSchema = character_interface_schema
+                return Response(HTTPStatus.NO_CONTENT)
+            elif schema == 'person':
+                modSchema = person_schema
+                return Response(HTTPStatus.NO_CONTENT)
+            else:
+               return Response(HTTPStatus.BAD_REQUEST)
+        else:
+            return Response(HTTPStatus.BAD_REQUEST)
+
+    def post(self, req):
+        global modSchema
+        if not req.json:
+            return Response(HTTPStatus.BAD_REQUEST)
+        res = modSchema.execute(req.json['query'])
+        return mkJSONResp(res)
+
 class InpObjType(graphene.InputObjectType):
 
     @classmethod
@@ -597,7 +622,8 @@ handlers = MkHandlers({
     '/union-graphql-err-no-member-types' : UnionGraphQLSchemaErrNoMemberTypes,
     '/union-graphql-err-wrapped-type' : UnionGraphQLSchemaErrWrappedType,
     '/default-value-echo-graphql' : EchoGraphQL,
-    '/person-graphql': PersonGraphQL
+    '/person-graphql': PersonGraphQL,
+    '/graphql-mod-schema' : ModSchemaGraphQL
 })
 
 

@@ -33,6 +33,13 @@ def mk_delete_remote_q(name):
         }
     }
 
+def mk_reload_remote_q(name):
+    return {
+        "type" : "reload_remote_schema",
+        "args" : {
+            "name": name
+        }
+    }
 
 class TestRemoteSchemaBasic:
     """ basic => no hasura tables are tracked """
@@ -136,11 +143,12 @@ class TestRemoteSchemaBasic:
 
     def test_add_remote_schema_with_union(self, hge_ctx):
         """add a remote schema with union in it"""
-        q = mk_add_remote_q('my remote union one', 'http://localhost:5000/union-graphql')
+        name = 'my remote union one'
+        q = mk_add_remote_q(name, 'http://localhost:5000/union-graphql')
         st_code, resp = hge_ctx.v1q(q)
         assert st_code == 200, resp
         check_query_f(hge_ctx, self.dir + '/search_union_type_query.yaml')
-        hge_ctx.v1q({"type": "remove_remote_schema", "args": {"name": "my remote union one"}})
+        hge_ctx.v1q(mk_delete_remote_q(name))
         assert st_code == 200, resp
 
     def test_add_remote_schema_with_union_err_no_member_types(self, hge_ctx):
@@ -158,6 +166,28 @@ class TestRemoteSchemaBasic:
     def test_add_remote_schema_with_union_err_wrapped_type(self, hge_ctx):
         """add a remote schema with error in spec for union"""
         check_query_f(hge_ctx, self.dir + '/add_remote_schema_with_union_err_wrapped_type.yaml')
+
+    def test_reload_remote_schema(self, hge_ctx):
+        """add a remote schema and then reload it after modifying the remote schema"""
+        name = 'mod_remote'
+        st_code, resp = hge_ctx.v1q(
+           mk_add_remote_q(name, 'http://localhost:5000/graphql-mod-schema')
+        )
+        assert st_code == 200, resp
+        with open('queries/graphql_introspection/introspection.yaml') as f:
+           introspectQuery = yaml.load(f)
+        st_code, resp = check_query(hge_ctx, introspectQuery)
+        assert st_code == 200, resp
+        assert check_introspection_result(resp, ['person'], ['person_'])
+        resp = requests.get('http://localhost:5000/graphql-mod-schema?schema=interface')
+        assert resp.status_code == 204, "Modify schema request failed"
+        st_code, resp = hge_ctx.v1q(mk_reload_remote_q(name))
+        assert st_code == 200, resp
+        st_code, resp = check_query(hge_ctx, introspectQuery)
+        assert st_code == 200, resp
+        assert check_introspection_result(resp, ['Droid','Human'], ['hero'])
+        hge_ctx.v1q(mk_delete_remote_q(name))
+        assert st_code == 200, resp
 
     def test_bulk_remove_add_remote_schema(self, hge_ctx):
         st_code, resp = hge_ctx.v1q_f(self.dir + '/basic_bulk_remove_add.yaml')
