@@ -127,7 +127,7 @@ refs:
         name: Generate coverage report
         working_directory: ./server
         command: |
-          stack --system-ghc hpc report /build/_server_test_output/$PG_VERSION/graphql-engine.tix --destdir /build/_server_test_output/$PG_VERSION
+          stack --system-ghc hpc report /build/_server_test_output/$PG_VERSION/graphql-engine.tix --destdir /build/_server_test_output/$PG_VERSION || true
     - store_artifacts:
         path: /build/_server_test_output
         destination: server_test
