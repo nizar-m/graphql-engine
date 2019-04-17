@@ -5,19 +5,16 @@ import { push } from 'react-router-redux';
 import { appPrefix, pageTitle } from '../constants';
 import globals from '../../../../Globals';
 import Button from '../../../Common/Button/Button';
-import TopicDescription from '../../CommonLanding/TopicDescription';
-import TryItOut from '../../CommonLanding/TryItOut';
+import TopicDescription from '../../Common/Landing/TopicDescription';
+import TryItOut from '../../Common/Landing/TryItOut';
 
 class CustomResolver extends React.Component {
   render() {
     const styles = require('../CustomResolver.scss');
-    // const node = require('./Node.svg');
-    // const Rectangle = require('./Rectangle.svg');
 
-    const { dispatch, migrationMode, customResolverList } = this.props;
-
+    const { dispatch, customResolverList } = this.props;
+    const showIntroSection = !customResolverList.resolvers.length;
     const getIntroSection = () => {
-      const showIntroSection = !customResolverList.resolvers.length;
       if (!showIntroSection) {
         return null;
       }
@@ -26,7 +23,7 @@ class CustomResolver extends React.Component {
         <div>
           <TopicDescription
             title="What are Remote Schemas?"
-            imgUrl="https://storage.googleapis.com/hasura-graphql-engine/console/assets/remote_schema.png"
+            imgUrl={`${globals.assetsPath}/common/img/remote_schema.png`}
             imgAlt="Remote Schema"
             description="Remote schemas are external GraphQL services which can be merged with Hasura to provide a unified GraphQL API. Think of it like automated schema stitching. All you need to do is build a GraphQL service and then provide its HTTP endpoint to Hasura. Your GraphQL service can be written in any language or framework."
           />
@@ -38,25 +35,22 @@ class CustomResolver extends React.Component {
     const getAddBtn = () => {
       let addBtn = null;
 
-      if (migrationMode) {
-        const handleClick = e => {
-          e.preventDefault();
+      const handleClick = e => {
+        e.preventDefault();
+        dispatch(push(`${globals.urlPrefix}${appPrefix}/manage/add`));
+      };
 
-          dispatch(push(`${globals.urlPrefix}${appPrefix}/manage/add`));
-        };
-
-        addBtn = (
-          <Button
-            data-test="data-create-remote-schemas"
-            color="yellow"
-            size="sm"
-            className={styles.add_mar_left}
-            onClick={handleClick}
-          >
-            Add
-          </Button>
-        );
-      }
+      addBtn = (
+        <Button
+          data-test="data-create-remote-schemas"
+          color="yellow"
+          size="sm"
+          className={styles.add_mar_left}
+          onClick={handleClick}
+        >
+          Add
+        </Button>
+      );
 
       return addBtn;
     };
@@ -90,6 +84,7 @@ class CustomResolver extends React.Component {
               MicrosoftAzureLink="https://github.com/hasura/graphql-engine/tree/master/community/boilerplates/remote-schemas/azure-functions/nodejs"
               awsLink="https://github.com/hasura/graphql-engine/tree/master/community/boilerplates/remote-schemas/aws-lambda/nodejs"
               adMoreLink="https://github.com/hasura/graphql-engine/tree/master/community/boilerplates/remote-schemas/"
+              isAvailable={showIntroSection}
             />
           </div>
         </div>
@@ -100,7 +95,6 @@ class CustomResolver extends React.Component {
 
 const mapStateToProps = state => {
   return {
-    migrationMode: state.main.migrationMode,
     customResolverList: state.customResolverData.listData,
   };
 };

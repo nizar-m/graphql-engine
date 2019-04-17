@@ -4,19 +4,25 @@ import pytest
 import json
 import queue
 import yaml
+from conftest import select_queries_context
+import pytest
+
+pytestmark = pytest.mark.websocket
 
 '''
     Refer: https://github.com/apollographql/subscriptions-transport-ws/blob/master/PROTOCOL.md#gql_connection_init
 '''
 
-def init_ws_conn(hge_ctx, ws_client):
-    payload = {}
-    if hge_ctx.hge_key is not None:
-        payload = {
-            'headers' : {
-                'X-Hasura-Admin-Secret': hge_ctx.hge_key
+def init_ws_conn(hge_ctx, ws_client, payload = None):
+    if payload is None:
+        payload = {}
+        if hge_ctx.hge_key is not None:
+            payload = {
+                'headers' : {
+                    'X-Hasura-Admin-Secret': hge_ctx.hge_key
+                }
             }
-        }
+
     init_msg = {
         'type': 'connection_init',
         'payload': payload,
@@ -57,19 +63,13 @@ class TestSubscriptionCtrl(object):
         with pytest.raises(queue.Empty):
             ev = ws_client.get_ws_event(3)
 
+@select_queries_context
 class TestSubscriptionBasic(object):
 
-    @pytest.fixture(scope='class')
-    def transact(self, request, hge_ctx):
-        self.dir = 'queries/subscriptions/basic'
-        st_code, resp = hge_ctx.v1q_f(self.dir + '/setup.yaml')
-        assert st_code == 200, resp
-        yield
-        st_code, resp = hge_ctx.v1q_f(self.dir + '/teardown.yaml')
-        assert st_code == 200, resp
+    dir = 'queries/subscriptions/basic'
 
     @pytest.fixture(autouse=True)
-    def ws_conn_init(self, transact, hge_ctx, ws_client):
+    def ws_conn_init(self, hge_ctx, ws_client):
         init_ws_conn(hge_ctx, ws_client)
 
     '''
@@ -173,11 +173,11 @@ class TestSubscriptionLiveQueries(object):
 
     @pytest.fixture(scope='class', autouse=True)
     def transact(self, request, hge_ctx, ws_client):
-        st_code, resp = hge_ctx.v1q_f(self.dir() + '/setup.yaml')
+        st_code, resp = hge_ctx.admin_v1q_f(self.dir() + '/setup.yaml')
         assert st_code == 200, resp
         init_ws_conn(hge_ctx, ws_client)
         yield
-        st_code, resp = hge_ctx.v1q_f(self.dir() + '/teardown.yaml')
+        st_code, resp = hge_ctx.admin_v1q_f(self.dir() + '/teardown.yaml')
         assert st_code == 200, resp
 
     def test_live_queries(self, hge_ctx, ws_client):
@@ -251,4 +251,3 @@ class TestSubscriptionLiveQueries(object):
     @classmethod
     def dir(cls):
         return 'queries/subscriptions/live_queries'
-

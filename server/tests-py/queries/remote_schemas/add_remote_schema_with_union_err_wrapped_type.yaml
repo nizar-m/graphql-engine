@@ -4,13 +4,13 @@ status: 400
 response:
   path: $.args
   error: |-
-    "Error in $.types[1].possibleTypes[0].name: expected Text, encountered Null"
+    Error in $.types[1].possibleTypes[0].name: expected Text, encountered Null
   code: remote-schema-error
 query:
   type: add_remote_schema
   args:
     name: err-unknown-types
     definition:
-      url: http://localhost:5000/union-graphql-err-wrapped-type
+      url: {{remote_gql_root_url}}/union-graphql-err-wrapped-type
       headers: []
       forward_client_headers: true

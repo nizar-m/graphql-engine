@@ -41,18 +41,21 @@ sudo apt install python3-pip
   ```
   cd console
   npm ci
+  npm run server-build
   cd ..
   ```
 - compile the server
   ```
   cd server
-  stack build --fast --flag graphql-engine:local-console
+  stack build --fast
   ```
 
 ### Run
 - Make sure postgres is running (Postgres >= 9.5)
 - Create a database on postgres
 - Run the binary: `stack exec graphql-engine -- --database-url=<database-url> serve`
+
+Use `--enable-console --console-assets-dir ../console/static/dist` if you want console to be served.
 
 database url looks like: `postgres://<username>:<password>@<host>:<port>/<dbname>`
 
@@ -89,17 +92,12 @@ pip3 install -r tests-py/requirements.txt
 ```
 
 - Make sure postgres is running
-- Run the graphql-engine:
-
-```
-stack exec graphql-engine -- --database-url=<database-url> serve --enable-console
-```
-
-- Set the environmental variables for event-trigger tests
+- Set the environmental variables for event-trigger tests and run the graphql-engine:
 
 ```
 export EVENT_WEBHOOK_HEADER="MyEnvValue"
 export WEBHOOK_FROM_ENV="http://127.0.0.1:5592"
+stack exec graphql-engine -- --database-url=<database-url> serve --enable-console --stringify-numeric-types
 ```
 
 - Run tests:

@@ -1,7 +1,9 @@
 import pytest
+from skip_test_modules import skip_module
 
-if not pytest.config.getoption("--hge-key"):
-    pytest.skip("--hge-key flag is missing, skipping tests", allow_module_level=True)
+skip_reason = skip_module(__file__)
+if skip_reason:
+    pytest.skip(skip_reason, allow_module_level=True)
 
 def v1qCompat(hge_ctx, q, headers = {}):
         h = {'X-Hasura-Access-Key': hge_ctx.hge_key}

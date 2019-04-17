@@ -26,7 +26,7 @@ args:
     delete:
       columns: "*"
       payload: ["c2"]
-    webhook: http://127.0.0.1:5592
+    webhook: {{evts_webhook_root_url}}
     retry_conf:
       num_retries: 10
       interval_sec: 100

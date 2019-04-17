@@ -1,7 +1,17 @@
 import React, { useState } from 'react';
-import { showErrorNotification } from '../Notification';
+import { showErrorNotification } from '../../Common/Notification';
 import gqlPattern, { gqlColumnErrorNotif } from '../Common/GraphQLValidation';
-import dataTypes from '../Common/DataTypes';
+import { commonDataTypes } from '../utils';
+
+import SearchableSelectBox from '../../../Common/SearchableSelect/SearchableSelect';
+import CustomInputAutoSuggest from '../../../Common/CustomInputAutoSuggest/CustomInputAutoSuggest';
+
+import {
+  getDataOptions,
+  getDefaultFunctionsOptions,
+  inferDefaultValues,
+} from '../Common/utils';
+
 import Button from '../../../Common/Button/Button';
 import { addColSql } from '../TableModify/ModifyActions';
 
@@ -28,7 +38,6 @@ const useColumnEditor = (dispatch, tableName) => {
         showErrorNotification(
           gqlColumnErrorNotif[0],
           gqlColumnErrorNotif[1],
-          gqlColumnErrorNotif[2],
           gqlColumnErrorNotif[3]
         )
       );
@@ -37,7 +46,6 @@ const useColumnEditor = (dispatch, tableName) => {
         showErrorNotification(
           'Error creating column!',
           'Column name/type cannot be empty',
-          '',
           {
             custom: 'Column name/type cannot be empty',
           }
@@ -67,8 +75,8 @@ const useColumnEditor = (dispatch, tableName) => {
     },
     colType: {
       value: colType,
-      onChange: e => {
-        setColumnState({ ...columnState, colType: e.target.value });
+      onChange: selected => {
+        setColumnState({ ...columnState, colType: selected.value });
       },
     },
     colNull: {
@@ -85,21 +93,22 @@ const useColumnEditor = (dispatch, tableName) => {
     },
     colDefault: {
       value: colDefault,
-      onChange: e => {
-        setColumnState({ ...columnState, colDefault: e.target.value });
+      onChange: (e, data) => {
+        const { newValue } = data;
+        setColumnState({ ...columnState, colDefault: newValue });
       },
     },
     onSubmit,
   };
 };
 
-const alterTypeOptions = dataTypes.map((datatype, index) => (
-  <option value={datatype.value} key={index} title={datatype.description}>
-    {datatype.name}
-  </option>
-));
-
-const ColumnCreator = ({ dispatch, tableName }) => {
+const ColumnCreator = ({
+  dispatch,
+  tableName,
+  dataTypes: restTypes = [],
+  validTypeCasts,
+  columnDefaultFunctions,
+}) => {
   const {
     colName,
     colType,
@@ -108,6 +117,61 @@ const ColumnCreator = ({ dispatch, tableName }) => {
     colDefault,
     onSubmit,
   } = useColumnEditor(dispatch, tableName);
+
+  let defaultOptions = [];
+
+  const getInferredDefaultValues = () =>
+    inferDefaultValues(columnDefaultFunctions, validTypeCasts)(colType.value);
+
+  const colDefaultFunctions =
+    colType.value in columnDefaultFunctions
+      ? columnDefaultFunctions[colType.value]
+      : getInferredDefaultValues();
+
+  if (colDefaultFunctions && colDefaultFunctions.length > 0) {
+    defaultOptions = getDefaultFunctionsOptions(colDefaultFunctions, 0);
+  }
+
+  const getDefaultInput = () => {
+    const theme = require('../../../Common/CustomInputAutoSuggest/CustomThemes/AddColumnDefault.scss');
+
+    return (
+      <CustomInputAutoSuggest
+        placeholder="default value"
+        options={defaultOptions}
+        className={`${styles.input}
+          ${styles.defaultInput}
+          input-sm form-control`}
+        {...colDefault}
+        data-test="default-value"
+        theme={theme}
+      />
+    );
+  };
+
+  const { columnDataTypes, columnTypeValueMap } = getDataOptions(
+    commonDataTypes,
+    restTypes,
+    0
+  );
+
+  const customSelectBoxStyles = {
+    container: {
+      width: '186px',
+    },
+    dropdownIndicator: {
+      padding: '5px',
+    },
+    placeholder: {
+      top: '44%',
+      fontSize: '12px',
+    },
+    singleValue: {
+      fontSize: '12px',
+      top: '44%',
+      color: '#555555',
+    },
+  };
 
   return (
     <div className={styles.activeEdit}>
@@ -122,17 +186,17 @@ const ColumnCreator = ({ dispatch, tableName }) => {
           data-test="column-name"
           {...colName}
         />
-        <select
-          className={`${styles.select} input-sm form-control`}
-          data-test="data-type"
-          {...colType}
-        >
-          <option disabled value="">
-            -- type --
-          </option>
-          {alterTypeOptions}
-        </select>
-
+        <span className={`${styles.select}`} data-test="col-type-0">
+          <SearchableSelectBox
+            options={columnDataTypes}
+            onChange={colType.onChange}
+            value={colType.value && columnTypeValueMap[colType.value]}
+            bsClass={`col-type-${0} modify_select`}
+            styleOverrides={customSelectBoxStyles}
+            filterOption={'prefix'}
+            placeholder="column_type"
+          />
+        </span>
         <input
           type="checkbox"
           className={`${styles.input} ${styles.nullable} input-sm form-control`}
@@ -148,7 +212,8 @@ const ColumnCreator = ({ dispatch, tableName }) => {
           data-test="unique-checkbox"
         />
         <label className={styles.nullLabel}>Unique</label>
-
+        {getDefaultInput()}
+        {/*
         <input
           placeholder="default value"
           type="text"
@@ -158,6 +223,7 @@ const ColumnCreator = ({ dispatch, tableName }) => {
           {...colDefault}
           data-test="default-value"
         />
+        */}
 
         <Button
           type="submit"

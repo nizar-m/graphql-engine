@@ -1,0 +1,114 @@
+defaultTestConf:
+  postgres:
+    withDocker:
+      image: circleci/postgres:11.3-alpine-postgis
+      databases:
+      - hgetest1
+      - hgetest2
+  graphqlEngine: withStackExec
+  auth : noAuth
+  pytest:
+    extraArgs : []
+  scenario : default
+auth:
+- noAuth
+- adminSecret
+- jwt
+- jwtStringified
+- getWebhook
+- postWebhook
+scenario:
+  default: {}
+  corsDomains:
+    hge:
+     env:
+       HASURA_GRAPHQL_CORS_DOMAIN: 'http://*.localhost, http://localhost:3000, https://*.foo.bar.com'
+    pytest:
+      defaultTests:
+      - test_cors.py
+      args:
+      - --test-cors
+  websocketReadCookieCorsEnabled: &WSRCCE
+    pytest:
+      defaultTests:
+      - test_websocket_init_cookie.py
+      args:
+      - --test-ws-init-cookie=read
+    allowedAuth: ['postWebhook']
+    authWebhookPath : '/cookie-auth'
+  websocketReadCookieCorsDisabled:
+    <<: *WSRCCE
+    hge:
+      args:
+      - --disable-cors
+      env:
+        HASURA_GRAPHQL_WS_READ_COOKIE: 'true'
+        HASURA_GRAPHQL_AUTH_HOOK_MODE: POST
+  websocketNoReadCookieCorsDisabled:
+    <<: *WSRCCE
+    hge:
+      args:
+      - '--disable-cors'
+    pytest:
+      defaultTests:
+      - test_websocket_init_cookie.py
+      args:
+      - --test-ws-init-cookie=noread
+  graphqlApiDisabledEnv: &NoGQLEnv
+    hge:
+      env:
+        HASURA_GRAPHQL_ENABLED_APIS: metadata
+    pytest:
+      defaultTests:
+      - test_apis_disabled.py
+      args:
+      - --test-graphql-disabled
+  graphqlApiDisabledArg:
+    <<: *NoGQLEnv
+    hge:
+      args:
+      - --enabled-apis
+      - metadata
+  metadataApiDisabledEnv: &NoMetadataEnv
+    hge:
+      env:
+        HASURA_GRAPHQL_ENABLED_APIS: graphql
+    pytest:
+      defaultTests:
+      - test_apis_disabled.py
+      args:
+      - --test-metadata-disabled
+  metadataApiDisabledArg:
+    <<: *NoMetadataEnv
+    hge:
+      args:
+      - --enabled-apis
+      - graphql
+  horizontalScaling:
+    postgres:
+      withPgbouncerProxy: true
+    withHgeReplica: true
+    pytest:
+      defaultTests:
+      - test_horizontal_scale.py
+  allowListEnabledEnv: &allowListEnv
+    hge:
+      env:
+        HASURA_GRAPHQL_ENABLE_ALLOWLIST: true
+    pytest:
+      defaultTests:
+      - test_allowlist_queries.py
+      args:
+      - --test-allowlist-queries
+  allowListEnabledArg:
+    <<: *allowListEnv
+    hge:
+      args:
+      - --enable-allowlist
+  webhookInsecure:
+    pytest:
+      defaultTests:
+      - test_webhook_insecure.py
+      args:
+      - --test-webhook-insecure
+    allowedAuth: ['getWebhook','postWebhook']

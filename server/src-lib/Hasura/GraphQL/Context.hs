@@ -28,7 +28,7 @@ data SelOpCtx
   = SelOpCtx
   { _socTable   :: !QualifiedTable
   , _socHeaders :: ![T.Text]
-  , _socFilter  :: !AnnBoolExpSQL
+  , _socFilter  :: !AnnBoolExpPartialSQL
   , _socLimit   :: !(Maybe Int)
   } deriving (Show, Eq)
 
@@ -36,7 +36,7 @@ data SelPkOpCtx
   = SelPkOpCtx
   { _spocTable   :: !QualifiedTable
   , _spocHeaders :: ![T.Text]
-  , _spocFilter  :: !AnnBoolExpSQL
+  , _spocFilter  :: !AnnBoolExpPartialSQL
   , _spocArgMap  :: !PGColArgMap
   } deriving (Show, Eq)
 
@@ -44,7 +44,7 @@ data FuncQOpCtx
   = FuncQOpCtx
   { _fqocTable    :: !QualifiedTable
   , _fqocHeaders  :: ![T.Text]
-  , _fqocFilter   :: !AnnBoolExpSQL
+  , _fqocFilter   :: !AnnBoolExpPartialSQL
   , _fqocLimit    :: !(Maybe Int)
   , _fqocFunction :: !QualifiedFunction
   , _fqocArgs     :: !FuncArgSeq
@@ -54,8 +54,8 @@ data UpdOpCtx
   = UpdOpCtx
   { _uocTable      :: !QualifiedTable
   , _uocHeaders    :: ![T.Text]
-  , _uocFilter     :: !AnnBoolExpSQL
-  , _uocPresetCols :: !PreSetCols
+  , _uocFilter     :: !AnnBoolExpPartialSQL
+  , _uocPresetCols :: !PreSetColsPartial
   , _uocAllCols    :: ![PGColInfo]
   } deriving (Show, Eq)
 
@@ -63,7 +63,7 @@ data DelOpCtx
   = DelOpCtx
   { _docTable   :: !QualifiedTable
   , _docHeaders :: ![T.Text]
-  , _docFilter  :: !AnnBoolExpSQL
+  , _docFilter  :: !AnnBoolExpPartialSQL
   , _docAllCols :: ![PGColInfo]
   } deriving (Show, Eq)
 
@@ -136,7 +136,7 @@ mkHsraObjFldInfo
   -> G.GType
   -> ObjFldInfo
 mkHsraObjFldInfo descM name params ty =
-  ObjFldInfo descM name params ty HasuraType
+  ObjFldInfo descM name params ty TLHasuraType
 
 mkHsraObjTyInfo
   :: Maybe G.Description
@@ -145,7 +145,7 @@ mkHsraObjTyInfo
   -> ObjFieldMap
   -> ObjTyInfo
 mkHsraObjTyInfo descM ty implIFaces flds =
-  mkObjTyInfo descM ty implIFaces flds HasuraType
+  mkObjTyInfo descM ty implIFaces flds TLHasuraType
 
 mkHsraInpTyInfo
   :: Maybe G.Description
@@ -153,7 +153,7 @@ mkHsraInpTyInfo
   -> InpObjFldMap
   -> InpObjTyInfo
 mkHsraInpTyInfo descM ty flds =
-  InpObjTyInfo descM ty flds HasuraType
+  InpObjTyInfo descM ty flds TLHasuraType
 
 mkHsraEnumTyInfo
   :: Maybe G.Description
@@ -161,10 +161,10 @@ mkHsraEnumTyInfo
   -> Map.HashMap G.EnumValue EnumValInfo
   -> EnumTyInfo
 mkHsraEnumTyInfo descM ty enumVals =
-  EnumTyInfo descM ty enumVals HasuraType
+  EnumTyInfo descM ty enumVals TLHasuraType
 
 mkHsraScalarTyInfo :: PGColType -> ScalarTyInfo
-mkHsraScalarTyInfo ty = ScalarTyInfo Nothing ty HasuraType
+mkHsraScalarTyInfo ty = ScalarTyInfo Nothing ty TLHasuraType
 
 fromInpValL :: [InpValInfo] -> Map.HashMap G.Name InpValInfo
 fromInpValL = mapFromL _iviName
@@ -211,7 +211,7 @@ mkCompExpInp colTy =
   , bool [] (stDWithinGeoOpInpVal stDWithinGeographyInpTy :
              map geoOpToInpVal geoOps) isGeographyType
   , [InpValInfo Nothing "_is_null" Nothing $ G.TypeNamed (G.Nullability True) $ G.NamedType "Boolean"]
-  ]) HasuraType
+  ]) TLHasuraType
   where
     tyDesc = mconcat
       [ "expression to compare columns of type "
@@ -349,7 +349,7 @@ ordByEnumTy =
       ]
 
 defaultTypes :: [TypeInfo]
-defaultTypes = $(fromSchemaDocQ defaultSchema HasuraType)
+defaultTypes = $(fromSchemaDocQ defaultSchema TLHasuraType)
 
 
 mkGCtx :: TyAgg -> RootFlds -> InsCtxMap -> GCtx
@@ -397,10 +397,10 @@ mkGCtx tyAgg (RootFlds flds) insCtxMap =
 
     -- _st_d_within has to stay with geometry type
     stDWithinGeometryInpM =
-      bool Nothing (Just $ stDWithinGeomInp) (PGGeometry `elem` colTys)
+      bool Nothing (Just stDWithinGeomInp) (PGGeometry `elem` colTys)
     -- _st_d_within_geography is created for geography type
     stDWithinGeographyInpM =
-      bool Nothing (Just $ stDWithinGeogInp) (PGGeography `elem` colTys)
+      bool Nothing (Just stDWithinGeogInp) (PGGeography `elem` colTys)
 
     stDWithinGeomInp =
       mkHsraInpTyInfo Nothing stDWithinGeometryInpTy $ fromInpValL
@@ -417,3 +417,11 @@ mkGCtx tyAgg (RootFlds flds) insCtxMap =
 
 emptyGCtx :: GCtx
 emptyGCtx = mkGCtx mempty mempty mempty
+
+data RemoteGCtx
+  = RemoteGCtx
+  { _rgTypes            :: !TypeMap
+  , _rgQueryRoot        :: !ObjTyInfo
+  , _rgMutationRoot     :: !(Maybe ObjTyInfo)
+  , _rgSubscriptionRoot :: !(Maybe ObjTyInfo)
+  } deriving (Show, Eq)

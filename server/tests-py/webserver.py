@@ -10,7 +10,10 @@ import http.server as http
 from http import HTTPStatus
 from urllib.parse import parse_qs, urlparse
 import json
-
+import ssl
+import multiprocessing
+import sys
+import threading
 
 class Response():
     """ Represents a HTTP `Response` object """
@@ -122,18 +125,75 @@ def MkHandlers(handlers):
             self.send_header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS')
             self.end_headers()
 
-        def log_message(self, format, *args):
-            return
-
     return HTTPHandler
 
 
 class WebServer(http.HTTPServer):
-    def __init__(self, server_address, handler):
-        super().__init__(server_address, handler)
 
-    def server_bind(self):
-        print('Running http server on {0}:{1}'.format(self.server_address[0],
-                                                      self.server_address[1]))
-        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.socket.bind(self.server_address)
+    allow_reuse_address = True
+
+    def __init__(self, server_address, handler, ssl_certs = None):
+        super().__init__(server_address, handler, bind_and_activate=False)
+        if ssl_certs:
+            (self.keyfile, self.crtfile) = ssl_certs
+            self.socket = ssl.SSLSocket(
+                socket.socket(self.address_family,self.socket_type),
+                keyfile = self.keyfile,
+                certfile = self.crtfile
+            )
+        self.server_bind()
+        self.server_activate()
+
+#Runs webserver as a process
+#Also performs stdout and stderr redirects
+class WebServerProcess(multiprocessing.Process):
+
+    def __init__(self, handler, ssl_certs=None, stdout=None, stderr=None, server_address=('127.0.0.1',9090)):
+        super(WebServerProcess, self).__init__()
+        self.stdout = stdout
+        self.stderr = stderr
+        if stdout and isinstance(stdout, str):
+            print("Webserver stdout file: " + stdout)
+            self.stdout = open(stdout, 'w')
+        else:
+            self.stdout = stdout
+        if stderr and isinstance(stderr, str):
+            print("Webserver stderr file: " + stderr)
+            if stderr == stdout:
+                self.stderr = self.stdout
+            else:
+                self.stderr = open(stderr, 'w')
+        else:
+            self.stderr = stderr
+        self.events = multiprocessing.Event()
+        self.ssl_certs = ssl_certs
+        self.server_address = server_address
+        self.handler = handler
+
+    def run(self):
+        if self.stdout:
+            sys.stdout = self.stdout
+        if self.stderr:
+            sys.stderr = self.stderr
+        self.webserver = WebServer(self.server_address, self.handler, ssl_certs=self.ssl_certs)
+        self.webserver_thread = threading.Thread(target=self.webserver.serve_forever)
+        self.webserver_thread.start()
+        self.wait_for_terminate()
+
+    def wait_for_terminate(self):
+        self.events.wait()
+        print  ('Webserver: Recieved terminate event')
+        self.teardown()
+
+    def stop(self):
+        self.events.set()
+
+    def teardown(self):
+        self.webserver.shutdown()
+        self.webserver.server_close()
+        self.webserver.socket.close()
+        self.webserver_thread.join()
+        if self.stdout:
+            self.stdout.close()
+        if self.stderr:
+            self.stderr.close()

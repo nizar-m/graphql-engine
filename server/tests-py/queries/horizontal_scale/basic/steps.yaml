@@ -1,6 +1,6 @@
--
+- description: Make schema changes in the first replica and check whether queries can be executed in the second`
   operation:
-    server: '1'
+    server: first_replica
     query:
       type: bulk
       args:
@@ -21,7 +21,7 @@
             sql: |
               insert into test_t1(t1_c1, t1_c2) VALUES(1, 'table1');
   validate:
-    server: '2'
+    server: second_replica
     response:
       data:
         test_t1:
@@ -35,9 +35,9 @@
             t1_c2
           }
         }
--
+- description: Reverse case. Make schema change in second_replica and run the query in the first
   operation:
-    server: '2'
+    server: second_replica
     query:
       type: bulk
       args:
@@ -70,7 +70,7 @@
             sql: |
               insert into test_t2(t2_c1, t2_c2) VALUES(1, 'table2');
   validate:
-    server: '1'
+    server: first_replica
     query:
       query: |
         query {

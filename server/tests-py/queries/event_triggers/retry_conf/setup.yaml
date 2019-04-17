@@ -39,7 +39,7 @@ args:
       columns: "*"
     delete:
       columns: "*"
-    webhook: http://127.0.0.1:5592/fail
+    webhook: {{evts_webhook_root_url}}/fail
     retry_conf:
       num_retries: 4
       interval_sec: 2
@@ -55,7 +55,7 @@ args:
       columns: "*"
     delete:
       columns: "*"
-    webhook: http://127.0.0.1:5592/timeout_short
+    webhook: {{evts_webhook_root_url}}/timeout_short
     retry_conf:
       num_retries: 2
       interval_sec: 2
@@ -72,7 +72,7 @@ args:
       columns: "*"
     delete:
       columns: "*"
-    webhook: http://127.0.0.1:5592/timeout_long
+    webhook: {{evts_webhook_root_url}}/timeout_long
     retry_conf:
       num_retries: 0
       interval_sec: 2

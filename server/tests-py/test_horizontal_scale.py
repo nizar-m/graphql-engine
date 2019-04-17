@@ -3,27 +3,50 @@ import yaml
 import time
 import jsondiff
 
-from validate import json_ordered
+from validate import validate_json, json_equals
 
+skip_if_option_not_set = pytest.mark.skipif(
+    'not config.getoption("--hge-replica-urls")',
+    reason = "option --hge-replica-urls is missing, skipping tests"
+)
 
-if not pytest.config.getoption("--test-hge-scale-url"):
-    pytest.skip("--test-hge-scale-url flag is missing, skipping tests", allow_module_level=True)
+pytestmark = skip_if_option_not_set
 
+get_metadata_q =  {
+    'args': {},
+    'type' :  'metadata_export'
+}
+
+def wait_for_metadata_sync(hge_ctx, wait_time=20):
+    assert wait_time > 0, "Timeout waiting for metadata sync of replicas"
+    if has_metadata_synced(hge_ctx):
+        return True
+    time.sleep(1)
+    return wait_for_metadata_sync(hge_ctx, wait_time - 1)
+
+def has_metadata_synced(hge_ctx):
+    metadatas = [get_metadata(hge_ctx, hge_url) for hge_url in [hge_ctx.hge_url, hge_ctx.hge_replica_url]]
+    return json_equals(metadatas[0], metadatas[1])
+
+def get_metadata(hge_ctx, hge_url):
+    return hge_ctx.admin_v1q_url(get_metadata_q, hge_url)
 
 class TestHorizantalScaleBasic():
     servers = {}
 
+    dir = 'queries/horizontal_scale/basic'
+
     @pytest.fixture(autouse=True, scope='class')
     def transact(self, hge_ctx):
-        self.servers['1'] = hge_ctx.hge_url
-        self.servers['2'] = hge_ctx.hge_scale_url
+        self.servers['first_replica'] = hge_ctx.hge_url
+        self.servers['second_replica'] = hge_ctx.hge_replica_url
         yield
         # teardown
-        st_code, resp = hge_ctx.v1q_f(self.dir() + '/teardown.yaml')
+        st_code, resp = hge_ctx.admin_v1q_f(self.dir + '/teardown.yaml')
         assert st_code == 200, resp
 
     def test_horizontal_scale_basic(self, hge_ctx):
-        with open(self.dir() + "/steps.yaml") as c:
+        with open(self.dir + "/steps.yaml") as c:
             conf = yaml.safe_load(c)
 
         assert isinstance(conf, list) == True, 'Not an list'
@@ -38,10 +61,11 @@ class TestHorizantalScaleBasic():
             assert st_code == 200, resp
 
             # wait for 20 sec
-            time.sleep(20)
+            time.sleep(1)
+            wait_for_metadata_sync(hge_ctx, 15)
             # validate data
             response = hge_ctx.http.post(
-                self.servers[step['validate']['server']] + "/v1alpha1/graphql",
+                self.servers[step['validate']['server']] + "/v1/graphql",
                 json=step['validate']['query']
             )
             st_code = response.status_code
@@ -49,12 +73,4 @@ class TestHorizantalScaleBasic():
             assert st_code == 200, resp
 
             if 'response' in step['validate']:
-                assert json_ordered(resp) == json_ordered(step['validate']['response']), yaml.dump({
-                    'response': resp,
-                    'expected': step['validate']['response'],
-                    'diff': jsondiff.diff(step['validate']['response'], resp)
-                })
-
-    @classmethod
-    def dir(cls):
-        return 'queries/horizontal_scale/basic'
+                validate_json(resp, step['validate']['response'])

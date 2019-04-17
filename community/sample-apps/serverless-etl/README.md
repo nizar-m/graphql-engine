@@ -2,6 +2,8 @@
 
 Live demo at https://serverless-etl.demo.hasura.app/
 
+[![Edit serverless-etl](https://codesandbox.io/static/img/play-codesandbox.svg)](https://codesandbox.io/s/github/hasura/graphql-engine/tree/master/community/sample-apps/serverless-etl?fontsize=14)
+
 This application demonstrates an ETL process using event triggers on [Hasura
 GraphQL Engine](https://github.com/hasura/graphql-engine).
 
@@ -85,7 +87,7 @@ Use the `TRIGGER_URL` from previous step.
 ### Step 5: Add configuration variables
 
 Edit `index.js` and add the following values:
-- `HGE_URL`, your GraphQL Engine URL (ending with `v1alpha1/graphql`)
+- `HGE_URL`, your GraphQL Engine URL (ending with `v1/graphql`)
 - `APP_ID`, the algolia application id
 - `SEARCH_KEY`, algolia search api key created in Step 2
 

@@ -1,8 +1,9 @@
 import pytest
+from skip_test_modules import skip_module
 
-if not pytest.config.getoption("--test-cors"):
-    pytest.skip("--test-cors flag is missing, skipping tests", allow_module_level=True)
-
+skip_reason = skip_module(__file__)
+if skip_reason:
+    pytest.skip(skip_reason, allow_module_level=True)
 
 def url(hge_ctx):
     return hge_ctx.hge_url + '/v1/version'

@@ -1,23 +1,30 @@
 import pytest
 import time
-from context import HGECtx, HGECtxError, EvtsWebhookServer, HGECtxGQLServer, GQLWsClient
+import webserver
+from fixture_modules import remote_graphql_server
+from fixture_modules.hge_websocket_client import hge_ws_client
+from fixture_modules.events_webhook import EvtsWebhookServer
+from fixture_modules.context import HGECtx, HGECtxError
 import threading
 import random
-from datetime import datetime
 import sys
 import os
+import socket
+import pathlib
+from colorama import Fore, Style
+from skip_test_modules import set_skip_test_module_rules
 
 def pytest_addoption(parser):
     parser.addoption(
         "--hge-urls",
         metavar="HGE_URLS",
-        help="csv list of urls for graphql-engine",
+        help="List of urls for graphql-engine",
         required=False,
         nargs='+'
     )
     parser.addoption(
         "--pg-urls", metavar="PG_URLS",
-        help="csv list of urls for connecting to Postgres directly",
+        help="List of urls for connecting to Postgres directly",
         required=False,
         nargs='+'
     )
@@ -62,10 +69,25 @@ def pytest_addoption(parser):
     )
 
     parser.addoption(
-        "--test-hge-scale-url",
-        metavar="<url>",
+        "--hge-replica-urls",
+        metavar="HGE_REPLICA_URLS",
         required=False,
-        help="Run testcases for horizontal scaling"
+        help="List of urls of graphql-engine replicas",
+        nargs='+'
+    )
+
+    parser.addoption(
+        "--evts-webhook-ports",
+        metavar="EVENTS_WEBHOOK_PORTS",
+        type=int,
+        required=False,
+        help="List of ports to be used by event webhooks",
+        nargs='+'
+    )
+
+    parser.addoption(
+        "--test-allowlist-queries", action="store_true",
+        help="Run Test cases with allowlist queries enabled"
     )
 
 #By default,
@@ -73,49 +95,81 @@ def pytest_addoption(parser):
 #2) Set test grouping to by filename (--dist=loadfile)
 def pytest_cmdline_preparse(config, args):
     worker = os.environ.get('PYTEST_XDIST_WORKER')
-    if 'xdist' in sys.modules and not worker:  # pytest-xdist plugin
+    if 'xdist' in sys.modules and not worker and not 'no:xdist' in args:  # pytest-xdist plugin
         num = 1
-        args[:] = ["-n" + str(num),"--dist=loadfile"] + args
+        args[:] = ['-n' + str(num), '--dist=loadfile', '--max-worker-restart=0'] + args
 
+def ensure_uniqueness(l, name):
+    if len(l) != len(unique_list(l)):
+        exit(name + ' are not unique: ' + str(l))
+
+def ensure_enough_parallel_configs(l, name, threads):
+    if threads > len(l):
+        exit('Not enough unique ' + name + ' specified, Required ' + str(threads) + ', got ' + str(len(l)))
 
 def pytest_configure(config):
     if is_master(config):
-        config.hge_ctx_gql_server = HGECtxGQLServer()
-        if not config.getoption('--hge-urls'):
-            print("hge-urls should be specified")
-        if not config.getoption('--pg-urls'):
-            print("pg-urls should be specified")
-        config.hge_url_list = config.getoption('--hge-urls')
-        config.pg_url_list =  config.getoption('--pg-urls')
-        if config.getoption('-n', default=None):
-            xdist_threads = config.getoption('-n')
-            assert xdist_threads <= len(config.hge_url_list), "Not enough hge_urls specified, Required " + str(xdist_threads) + ", got " + str(len(config.hge_url_list))
-            assert xdist_threads <= len(config.pg_url_list), "Not enough pg_urls specified, Required " + str(xdist_threads) + ", got " + str(len(config.pg_url_list))
+        for o in ['--hge-urls', '--pg-urls']:
+            if not config.getoption(o):
+                exit(o + ' should be specified')
 
-    random.seed(datetime.now())
+        config.hge_urls = config.getoption('--hge-urls').copy()
+        config.pg_urls = config.getoption('--pg-urls').copy()
+
+        config.remote_gql_ports = get_unused_ports(6000, xdist_threads)
+
+        if config.getoption('--evts-webhook-ports'):
+            config.evts_webhook_ports = config.getoption('--evts-webhook-ports').copy()
+        else:
+            config.evts_webhook_ports = get_unused_ports(5592, xdist_threads)
+
+        uniq_list = [ 
+            (config.pg_urls, 'Postgres URLs'), (config.hge_urls, 'HGE urls'), 
+            (config.evts_webhook_port, 'Events webhook ports'), (config.remote_gqk_port, 'Remote GraphQL engine port') ]
+
+        if config.getoption('--hge-replica-urls'):
+            config.hge_replica_urls = config.getoption('--hge-replica-urls').copy()
+            uniq_list.append((config.hge_replica_urls, 'HGE replica URLs'))
+
+        xdist_threads = config.getoption('-n', default=None) or 1
+
+        for (l,n) in uniq_list:
+            ensure_uniqueness(l,n)
+            if xdist_threads > 1:
+                ensure_enough_parallel_configs(l, n, xdist_threads)
+
+    set_skip_test_module_rules(config)
+    #pytest modifies stderr to capture the test outputs, which also prevents from showing errors during pytest.exit(err)
+    #Saving the original stderr to config so that errors can be shown
+    config.stderr = sys.stderr
+    random.seed()
 
 @pytest.hookimpl(optionalhook=True)
 def pytest_configure_node(node):
-    node.slaveinput["hge-url"] = node.config.hge_url_list.pop()
-    node.slaveinput["pg-url"] = node.config.pg_url_list.pop()
+    for attr in [ 'hge_url', 'pg_url', 'evts_webhook_port', 'remote_gql_port' ]:
+        node.slaveinput[attr] = getattr(node.config, attr + 's').pop()
 
-def pytest_unconfigure(config):
-        config.hge_ctx_gql_server.teardown()
+    if hasattr(node.config, 'hge_replica_urls'):
+        node.slaveinput['hge-replica-url'] = node.config.hge_replica_urls.pop()
+
+#We cannot override a class level parametrization with a function level one when using pytest.mark.parmetrize.
+#So we are using the 'transport' marker for overrides.
+#The closest 'transport' marker is used to parametrize tests.
+def pytest_generate_tests(metafunc):
+    transport = metafunc.definition.get_closest_marker('transport')
+    if transport:
+        metafunc.parametrize('transport', [pytest.param(o, marks=getattr(pytest.mark,o)) for o in transport.args], scope="function")
 
 @pytest.fixture(scope='module')
 def hge_ctx(request):
+    """
+    This fixture sets the main context for tests
+    """
     config = request.config
     print("create hge_ctx")
-    if is_master(config):
-        hge_url = config.hge_url_list[0]
-    else:
-        hge_url = config.slaveinput["hge-url"]
-
-    if is_master(config):
-        pg_url = config.pg_url_list[0]
-    else:
-        pg_url = config.slaveinput["pg-url"]
-
+    hge_url = get_config(config, 'hge-url')
+    pg_url  = get_config(config, 'pg-url')
+    hge_replica_url = get_config_or_none(config, 'hge-replica-url')
     hge_key = config.getoption('--hge-key')
     hge_webhook = config.getoption('--hge-webhook')
     webhook_insecure = config.getoption('--test-webhook-insecure')
@@ -123,7 +177,6 @@ def hge_ctx(request):
     hge_jwt_conf = config.getoption('--hge-jwt-conf')
     ws_read_cookie = config.getoption('--test-ws-init-cookie')
     metadata_disabled = config.getoption('--test-metadata-disabled')
-    hge_scale_url = config.getoption('--test-hge-scale-url')
     try:
         hge_ctx = HGECtx(
             hge_url=hge_url,
@@ -135,9 +188,12 @@ def hge_ctx(request):
             hge_jwt_conf=hge_jwt_conf,
             ws_read_cookie=ws_read_cookie,
             metadata_disabled=metadata_disabled,
-            hge_scale_url=hge_scale_url
+            hge_replica_url=hge_replica_url
         )
     except HGECtxError as e:
+        if not is_master(config):
+            #Hack for xdist to show error
+            config.stderr.write(Style.BRIGHT + '[' + config.slaveinput['workerid'] + '] ' + Fore.RED + 'HGECtxError: ' + str(e) + Style.RESET_ALL)
         pytest.exit(str(e))
 
     yield hge_ctx  # provide the fixture value
@@ -145,36 +201,231 @@ def hge_ctx(request):
     hge_ctx.teardown()
     time.sleep(1)
 
+@pytest.fixture(scope='module')
+def remote_gql_server(request, hge_ctx):
+    """
+    This fixture runs the remote GraphQL server needed for tests with Remote GraphQL servers
+    """
+    port = get_config(request.config, 'remote_gql_port')
+
+    remote_gql_httpd = webserver.WebServer(
+        ('127.0.0.1', port),
+        remote_graphql_server.gql_server_handlers
+    )
+    gql_server = start_webserver(remote_gql_httpd)
+    wait_for_port_open(port)
+    hge_ctx.services_conf.remote_gql_root_url = 'http://127.0.0.1:' + str(port)
+    yield remote_gql_httpd
+    stop_webserver(gql_server)
+    hge_ctx.services_conf.remote_gql_root_url = None
+
 @pytest.fixture(scope='class')
-def evts_webhook(request):
-    webhook_httpd = EvtsWebhookServer(server_address=('127.0.0.1', 5592))
-    web_server = threading.Thread(target=webhook_httpd.serve_forever)
-    web_server.start()
+def evts_webhook(request, hge_ctx):
+    """
+    This fixture returns the events webhook server
+    """
+    port = get_config(request.config, 'evts_webhook_port')
+    webhook_httpd = EvtsWebhookServer(server_address=('127.0.0.1',port))
+    webserver = start_webserver(webhook_httpd)
+    hge_ctx.services_conf.evts_webhook_root_url = 'http://127.0.0.1:' + str(port)
     yield webhook_httpd
-    webhook_httpd.shutdown()
-    webhook_httpd.server_close()
-    web_server.join()
+    stop_webserver(webserver)
+    hge_ctx.services_conf.evts_webhook_root_url = None
+
+def start_webserver(httpd):
+    webserver = threading.Thread(target=httpd.serve_forever)
+    webserver.httpd = httpd
+    webserver.start()
+    return webserver
+    
+def stop_webserver(httpd, webserver):
+    webserver.httpd.shutdown()
+    webserver.httpd.server_close()
+    webserver.join()
 
 @pytest.fixture(scope='class')
+def remote_gql_url(remote_gql_server):
+    '''
+    Get the url of the remote GraphQL server endpoint with the given path.
+    '''
+    return get_url_func(remote_gql_server)
+
+@pytest.fixture(scope='class')
+def evts_webhook_url(evts_webhook):
+    '''
+    Get the url of the events webhook with the given path.
+    '''
+    return get_url_func(evts_webhook)
+
+@pytest.fixture(scope='function')
 def ws_client(request, hge_ctx):
-    client = GQLWsClient(hge_ctx)
-    time.sleep(0.1)
-    yield client
-    client.teardown()
+    """
+    This fixture provides a websocket client that supports Apollo protocol
+    """
+    endpoint = request.cls.websocket_endpoint
+    with hge_ws_client(hge_ctx, endpoint) as client:
+        yield client
+
+select_queries_context = pytest.mark.usefixtures('db_state_for_select_queries')
+
+mutations_context = pytest.mark.usefixtures('db_schema_for_mutations', 'db_data_for_mutations')
+
+ddl_queries_context = pytest.mark.usefixtures('db_state_for_ddl_queries')
+
+metadata_ops_context = ddl_queries_context
+
+any_query_context = ddl_queries_context
+
+evts_db_state_context = pytest.mark.usefixtures('db_state_for_ddl_queries', 'evts_webhook')
 
 @pytest.fixture(scope='class')
-def setup_ctrl(request, hge_ctx):
+def db_state_for_select_queries(request, hge_ctx):
+    """"
+    This fixture sets up the database state for select queries.
+    A class level scope would work, as select queries does not change database state
     """
-    This fixure is used to store the state of test setup in some test classes.
-    Used primarily when teardown is skipped in some test cases in the class where the test is not expected to change the database state.
+    setup = getattr(request.cls, 'setup_files', request.cls.dir + '/setup.yaml')
+    teardown = getattr(request.cls, 'teardown_files', request.cls.dir + '/teardown.yaml')
+    yield from setup_and_teardown(hge_ctx, setup, teardown)
+
+@pytest.fixture(scope='class')
+def db_schema_for_mutations(request, hge_ctx):
+    """"
+    This fixture sets up the database schema for mutations
+    This can have a class level scope, since mutations does not change schema
     """
-    setup_ctrl = { "setupDone" : False }
-    yield setup_ctrl
+    setup = getattr(request.cls, 'schema_setup_files', request.cls.dir + '/schema_setup.yaml')
+    teardown = getattr(request.cls, 'schema_teardown_files', request.cls.dir + '/schema_teardown.yaml')
+    yield from setup_and_teardown(hge_ctx, setup, teardown)
+
+@pytest.fixture(scope='function')
+def db_data_for_mutations(request, hge_ctx, db_schema_for_mutations):
+    """"
+    This fixture sets up the data for mutations
+    Requires a function level scope, since mutations may change data
+    """
+    setup = getattr(request.cls, 'data_setup_files', request.cls.dir + '/data_setup.yaml')
+    teardown = getattr(request.cls, 'data_teardown_files', request.cls.dir + '/data_teardown.yaml')
+    yield from setup_and_teardown(hge_ctx, setup, teardown, False)
+
+@pytest.fixture(scope='function')
+def db_state_for_ddl_queries(request, db_state_info, hge_ctx):
+    """"
+    This fixture sets up the database state for metadata operations
+    Requires a function level scope, since metadata operations may change both the schema and data
+    """
+    setup_if_reqd(request, db_state_info, hge_ctx)
+    yield
+    teardown_if_reqd(request, db_state_info, hge_ctx)
+
+@pytest.fixture(scope='class')
+def db_state_info(request, hge_ctx):
+    """
+    This fixture helps in tracking the overall db setup status per class.
+    It also sets up database state before the first test
+    and tears down database state after the last test in the class.
+    """
+    db_state_info = { "setup_done" : False }
+    setup_if_reqd(request, db_state_info, hge_ctx)
+    yield db_state_info
     hge_ctx.may_skip_test_teardown = False
-    request.cls().do_teardown(setup_ctrl, hge_ctx)
+    teardown_if_reqd(request, db_state_info, hge_ctx)
+
+def get_url_func(server):
+    def get_url(path):
+        (host, port) = server.server_address
+        return 'http://127.0.0.1:{}{}'.format(port, path)
+    return get_url
+
+def setup_if_reqd(request, db_state_info, hge_ctx):
+    dir = request.cls.dir
+    setup = getattr(request.cls, 'setup_files', request.cls.dir + '/setup.yaml')
+    def v1q_f(f):
+        st_code, resp = hge_ctx.admin_v1q_f(f) 
+        assert st_code == 200, resp
+    if not db_state_info['setup_done']:
+        st_code, resp = list_or_elem(v1q_f, setup)
+        db_state_info['setup_done'] = True
+
+def teardown_if_reqd(request, db_state_info, hge_ctx):
+    dir = request.cls.dir
+    teardown = getattr(request.cls, 'teardown_files', request.cls.dir + '/teardown.yaml')
+    def v1q_f(f):
+        st_code, resp = hge_ctx.admin_v1q_f(f)   
+        assert st_code == 200, resp
+    if db_state_info['setup_done'] and not hge_ctx.may_skip_test_teardown:
+        list_or_elem(v1q_f, teardown)
+        db_state_info['setup_done'] = False
+
+def setup_and_teardown(hge_ctx, setup, teardown, assert_file_exists=True):
+    def assert_file_exists(f):
+        assert pathlib.Path.exists(f), "Could not find file" + f
+    if assert_file_exists:
+        for o in [setup, teardown]:
+            run_elem_or_list(assert_file_exists, o)
+    def v1q_f(f):
+        if pathlib.Path.exists(f):
+            st_code, resp = hge_ctx.admin_v1q_f(f)   
+            assert st_code == 200, resp
+    run_elem_or_list(v1q_f, setup)
+    yield
+    run_elem_or_list(v1q_f, teardown)
+
+def run_elem_or_list(f, x):
+    if isinstance(x, str):
+        return f(x)
+    elif isinstance(x, list):
+        return [f(e) for e in x]
+
+def get_config_or_none(config, attr):
+    if is_master(config):
+        return getattr(config, attr + 's',[None])[0]
+    else:
+        return config.slaveinput.get(attr)
+
+def get_config(config, attr):
+    if is_master(config):
+        return getattr(config, attr + 's')[0]
+    else:
+        return config.slaveinput[attr]
 
 def is_master(config):
     """True if the code running the given pytest.config object is running in a xdist master
     node or not running xdist at all.
     """
     return not hasattr(config, 'slaveinput')
+
+def unique_list(x):
+    return list(set(x))
+
+def exit(e):
+    pytest.exit(Fore.RED + Style.BRIGHT + e + Style.RESET_ALL)
+
+def wait_for_port_open(port, max_wait=10):
+    start_time = time.time()
+    while time.time() - start_time < max_wait:
+        if is_port_open(port):
+            return True
+        else:
+            time.sleep(0.2)
+    else:
+        return False
+
+def is_port_open(port):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        res = sock.connect_ex(('127.0.0.1', port))
+        return res == 0
+
+def get_unused_port(start):
+    if is_port_open(start):
+        return get_unused_port(start + 1)
+    else:
+        return start
+
+def get_unused_ports(start, count):
+    ports = []
+    for i in range(0, count):
+        port = get_unused_port(start)
+        ports.append(port)
+        start = port + 1
+    return ports

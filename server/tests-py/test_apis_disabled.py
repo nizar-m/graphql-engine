@@ -2,6 +2,11 @@
 
 import pytest
 from validate import check_query, check_query_f
+from skip_test_modules import skip_module
+
+skip_reason = skip_module(__file__)
+if skip_reason:
+    pytest.skip(skip_reason, allow_module_level=True)
 
 def check_post_404(hge_ctx,url):
    return check_query(hge_ctx, {
@@ -10,10 +15,26 @@ def check_post_404(hge_ctx,url):
      'query': {}
    })
 
+@pytest.fixture(scope='class')
+def skip_based_on_flags(request):
+   '''
+   Skip tests if the required condition is not set
+   '''
+   cls = request.cls
+   class_name = cls.__name__
+   flag = getattr(cls, 'skip_if_flag_set', None)
+   if flag and request.config.getoption(flag):
+      pytest.skip('{}: Flag {} is set. Skipping'.format(class_name, flag))
 
-@pytest.mark.skipif(not pytest.config.getoption("--test-metadata-disabled"),
-                    reason="flag --test-metadata-disabled is not set. Cannot run tests for metadata disabled")
+   flag = getattr(cls, 'skip_if_flag_not_set', None)
+   if flag and not request.config.getoption(flag):
+      pytest.skip('{}: Flag {} is NOT set. Skipping'.format(class_name, flag))
+
+pytestmark = pytest.mark.usefixtures('skip_based_on_flags')
+
 class TestMetadataDisabled:
+
+    skip_if_flag_not_set = '--test-metadata-disabled'
 
     def test_metadata_v1_query_disabled(self, hge_ctx):
         check_post_404(hge_ctx,'/v1/query')
@@ -25,28 +46,28 @@ class TestMetadataDisabled:
         check_post_404(hge_ctx,'/api/1/table/foo/select')
 
 
-@pytest.mark.skipif(not pytest.config.getoption("--test-graphql-disabled"),
-                    reason="--test-graphql-disabled is not set. Cannot run GraphQL disabled tests")
 class TestGraphQLDisabled:
 
+    skip_if_flag_not_set = '--test-graphql-disabled'
+
     def test_graphql_endpoint_disabled(self, hge_ctx):
-        check_post_404(hge_ctx,'/v1alpha1/graphql')
+        check_post_404(hge_ctx, '/v1/graphql')
 
     def test_graphql_explain_disabled(self, hge_ctx):
-        check_post_404(hge_ctx,'/v1alpha1/graphql/explain')
+        check_post_404(hge_ctx, '/v1/graphql/explain')
 
 
-@pytest.mark.skipif(pytest.config.getoption("--test-graphql-disabled"),
-                    reason="--test-graphql-disabled is set. Cannot run GraphQL enabled tests")
 class TestGraphQLEnabled:
+
+    skip_if_flag_set = '--test-graphql-disabled'
 
     def test_graphql_introspection(self, hge_ctx):
         check_query_f(hge_ctx, "queries/graphql_introspection/introspection_only_kind_of_queryType.yaml")
 
 
-@pytest.mark.skipif(pytest.config.getoption("--test-metadata-disabled"),
-                    reason="--test-metadata-disabled is set. Cannot run metadata enabled tests")
 class TestMetadataEnabled:
+
+    skip_if_flag_set = '--test-metadata-disabled'
 
     def test_reload_metadata(self, hge_ctx):
         check_query_f(hge_ctx, "queries/v1/metadata/reload_metadata.yaml")

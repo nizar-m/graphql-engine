@@ -1,13 +1,19 @@
-type: bulk
-args:
-- type: remove_remote_schema
+description: Bulk remove and add remote schemas
+url: /v1/query
+status: 200
+response:
+  - message: success
+  - message: success
+query:
+  type: bulk
   args:
-    name: simple 1
-
-- type: add_remote_schema
-  args:
-    name: simple 2
-    comment: testing
-    definition:
-      url: http://localhost:5000/hello-graphql
-      forward_client_headers: false
+  - type: remove_remote_schema
+    args:
+      name: simple 1
+  - type: add_remote_schema
+    args:
+      name: simple 2
+      comment: testing
+      definition:
+        url: {{remote_gql_root_url}}/hello-graphql
+        forward_client_headers: false

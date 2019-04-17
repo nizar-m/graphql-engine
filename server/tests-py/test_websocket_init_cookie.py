@@ -5,10 +5,11 @@ from urllib.parse import urlparse
 import websocket
 import pytest
 from validate import check_query
+from skip_test_modules import skip_module
 
-if not pytest.config.getoption("--test-ws-init-cookie"):
-    pytest.skip("--test-ws-init-cookie flag is missing, skipping tests", allow_module_level=True)
-
+skip_reason = skip_module(__file__)
+if skip_reason:
+    pytest.skip(skip_reason, allow_module_level=True)
 
 def url(hge_ctx):
     ws_url = urlparse(hge_ctx.hge_url)._replace(scheme='ws', path='/v1alpha1/graphql')
@@ -23,11 +24,11 @@ class TestWebsocketInitCookie():
 
     @pytest.fixture(autouse=True)
     def transact(self, hge_ctx):
-        st_code, resp = hge_ctx.v1q_f(self.dir + '/person_table.yaml')
+        st_code, resp = hge_ctx.admin_v1q_f(self.dir + '/person_table.yaml')
         assert st_code == 200, resp
         yield
         assert st_code == 200, resp
-        st_code, resp = hge_ctx.v1q_f(self.dir + '/drop_person_table.yaml')
+        st_code, resp = hge_ctx.admin_v1q_f(self.dir + '/drop_person_table.yaml')
 
     def _send_query(self, hge_ctx):
         ws_url = url(hge_ctx)

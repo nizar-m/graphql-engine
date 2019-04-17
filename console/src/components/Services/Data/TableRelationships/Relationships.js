@@ -8,12 +8,11 @@ import {
   relSelectionChanged,
   relNameChanged,
   resetRelationshipForm,
-  relManualAddClicked,
   formRelName,
   getExistingFieldsMap,
 } from './Actions';
 import { findAllFromRel } from '../utils';
-import { showErrorNotification } from '../Notification';
+import { showErrorNotification } from '../../Common/Notification';
 import { setTable } from '../DataActions';
 import gqlPattern, { gqlRelErrorNotif } from '../Common/GraphQLValidation';
 import { getRelDef, getObjArrRelList } from './utils';
@@ -22,7 +21,7 @@ import Button from '../../../Common/Button/Button';
 import AddManualRelationship from './AddManualRelationship';
 import suggestedRelationshipsRaw from './autoRelations';
 import RelationshipEditor from './RelationshipEditor';
-import semverCheck from '../../../../helpers/semver';
+import { NotFoundError } from '../../../Error/PageNotFound';
 
 const addRelationshipCellView = (
   dispatch,
@@ -53,7 +52,6 @@ const addRelationshipCellView = (
         showErrorNotification(
           'Error adding relationship!',
           'Please select a name for the relationship',
-          '',
           { custom: 'Relationship name cannot be empty' }
         )
       );
@@ -63,7 +61,6 @@ const addRelationshipCellView = (
         showErrorNotification(
           gqlRelErrorNotif[0],
           gqlRelErrorNotif[1],
-          gqlRelErrorNotif[2],
           gqlRelErrorNotif[3]
         )
       );
@@ -89,14 +86,7 @@ const addRelationshipCellView = (
           </Button>
         )}
         &nbsp;
-        {getRelDef(
-          rel.isObjRel,
-          rel.lcol,
-          rel.rcol,
-          tableSchema.table_name,
-          rel.rTable
-        )}{' '}
-        &nbsp;
+        {getRelDef(rel)} &nbsp;
       </div>
       {selectedRelationship === rel ? (
         <form className="form-inline" onSubmit={onSave}>
@@ -131,6 +121,7 @@ const addRelationshipCellView = (
 
 const AddRelationship = ({
   tableName,
+  currentSchema,
   allSchemas,
   cachedRelationshipData,
   dispatch,
@@ -138,11 +129,14 @@ const AddRelationship = ({
   const styles = require('../TableModify/ModifyTable.scss');
   const tableStyles = require('../../../Common/TableCommon/TableStyles.scss');
 
-  const cTable = allSchemas.find(t => t.table_name === tableName);
+  const cTable = allSchemas.find(
+    t => t.table_name === tableName && t.table_schema === currentSchema
+  );
 
   const suggestedRelationshipsData = suggestedRelationshipsRaw(
     tableName,
-    allSchemas
+    allSchemas,
+    currentSchema
   );
 
   if (
@@ -152,9 +146,7 @@ const AddRelationship = ({
     return (
       <div className={`${styles.remove_margin_bottom} form-group`}>
         <label>
-          {' '}
-          You have no new relationships that can be added. Add a foreign key to
-          get suggestions{' '}
+          You have no new relationships that can be added via foreign-keys
         </label>
       </div>
     );
@@ -204,8 +196,8 @@ const AddRelationship = ({
     }
   This strips it down to either objRel or arrRel */
 
-  const relName = cachedRelationshipData.name
-    ? cachedRelationshipData.name
+  const relName = cachedRelationshipData.relName
+    ? cachedRelationshipData.relName
     : '';
 
   const column1 = [];
@@ -261,7 +253,7 @@ const AddRelationship = ({
   return (
     <div>
       <div>
-        <label> Add a new relationship </label>
+        <label> Add new relationships via foreign-keys </label>
       </div>
       <div className={tableStyles.tableContainer}>
         <table
@@ -272,8 +264,8 @@ const AddRelationship = ({
           <thead>
             <tr>
               {[
-                'Suggested object relationships',
-                'Suggested Array relationships',
+                'Suggested Object Relationships',
+                'Suggested Array Relationships',
               ].map((s, i) => (
                 <th key={i}>{s}</th>
               ))}
@@ -308,39 +300,12 @@ const AddRelationship = ({
 };
 
 class Relationships extends Component {
-  state = {
-    supportRename: false,
-  };
-
   componentDidMount() {
-    const { dispatch, serverVersion, tableName } = this.props;
+    const { dispatch, tableName } = this.props;
     dispatch({ type: RESET });
     dispatch(setTable(tableName));
-    if (serverVersion) {
-      this.checkRenameSupport(serverVersion);
-    }
   }
 
-  componentWillReceiveProps(nextProps) {
-    if (
-      nextProps.serverVersion &&
-      nextProps.serverVersion !== this.props.serverVersion
-    ) {
-      this.checkRenameSupport(nextProps.serverVersion);
-    }
-  }
-
-  checkRenameSupport = serverVersion => {
-    try {
-      if (semverCheck('tableColumnRename', serverVersion)) {
-        this.setState({
-          supportRename: true,
-        });
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
   render() {
     const {
       tableName,
@@ -351,6 +316,7 @@ class Relationships extends Component {
       lastSuccess,
       dispatch,
       relAdd,
+      manualRelAdd,
       currentSchema,
       migrationMode,
       schemaList,
@@ -358,7 +324,15 @@ class Relationships extends Component {
     const styles = require('../TableModify/ModifyTable.scss');
     const tableStyles = require('../../../Common/TableCommon/TableStyles.scss');
 
-    const tableSchema = allSchemas.find(t => t.table_name === tableName);
+    const tableSchema = allSchemas.find(
+      t => t.table_name === tableName && t.table_schema === currentSchema
+    );
+
+    if (!tableSchema) {
+      // throw a 404 exception
+      throw new NotFoundError();
+    }
+
     let alert = null;
     if (ongoingRequest) {
       alert = (
@@ -409,16 +383,12 @@ class Relationships extends Component {
                 const column1 = rel.objRel ? (
                   <RelationshipEditor
                     dispatch={dispatch}
-                    tableName={tableName}
                     key={rel.objRel.rel_name}
-                    relName={rel.objRel.rel_name}
                     relConfig={findAllFromRel(
                       allSchemas,
                       tableSchema,
                       rel.objRel
                     )}
-                    isObjRel
-                    allowRename={this.state.supportRename}
                   />
                 ) : (
                   <td />
@@ -427,15 +397,11 @@ class Relationships extends Component {
                   <RelationshipEditor
                     key={rel.arrRel.rel_name}
                     dispatch={dispatch}
-                    tableName={tableName}
-                    relName={rel.arrRel.rel_name}
                     relConfig={findAllFromRel(
                       allSchemas,
                       tableSchema,
                       rel.arrRel
                     )}
-                    isObjRel={false}
-                    allowRename={this.state.supportRename}
                   />
                 ) : (
                   <td />
@@ -453,7 +419,6 @@ class Relationships extends Component {
       );
     }
 
-    // if (tableSchema.primary_key.columns > 0) {}
     return (
       <div className={`${styles.container} container-fluid`}>
         <TableHeader
@@ -473,8 +438,17 @@ class Relationships extends Component {
               <div className={styles.activeEdit}>
                 <AddRelationship
                   tableName={tableName}
+                  currentSchema={currentSchema}
                   allSchemas={allSchemas}
                   cachedRelationshipData={relAdd}
+                  dispatch={dispatch}
+                />
+                <hr />
+                <AddManualRelationship
+                  tableSchema={tableSchema}
+                  allSchemas={allSchemas}
+                  schemaList={schemaList}
+                  relAdd={manualRelAdd}
                   dispatch={dispatch}
                 />
               </div>
@@ -490,40 +464,6 @@ class Relationships extends Component {
                 + Add relationship
               </Button>
             )}
-            <hr />
-            {relAdd.isManualExpanded ? (
-              <div className={styles.activeEdit}>
-                <AddManualRelationship
-                  tableName={tableName}
-                  isObjRel={relAdd.isObjRel}
-                  rTable={relAdd.rTable}
-                  dispatch={dispatch}
-                  lcol={relAdd.lcol}
-                  rcol={relAdd.rcol}
-                  allSchemas={allSchemas}
-                  schemaList={schemaList}
-                  manualColumns={relAdd.manualColumns}
-                  manualRelInfo={relAdd.manualRelInfo}
-                  titleInfo={'Add a relationship manually'}
-                  currentSchema={currentSchema}
-                  showClose
-                  dataTestVal={'table-add-manual-relationship'}
-                />
-              </div>
-            ) : (
-              <Button
-                type="submit"
-                color="white"
-                size="sm"
-                onClick={() => {
-                  dispatch(relManualAddClicked());
-                }}
-                data-test="add-manual-relationship"
-              >
-                + Add a relationship manually
-              </Button>
-            )}
-            <hr />
           </div>
         </div>
         <div className={`${styles.fixed} hidden`}>{alert}</div>
@@ -539,6 +479,7 @@ Relationships.propTypes = {
   activeEdit: PropTypes.object.isRequired,
   fkAdd: PropTypes.object.isRequired,
   relAdd: PropTypes.object.isRequired,
+  manualRelAdd: PropTypes.object.isRequired,
   migrationMode: PropTypes.bool.isRequired,
   ongoingRequest: PropTypes.bool.isRequired,
   lastError: PropTypes.object,

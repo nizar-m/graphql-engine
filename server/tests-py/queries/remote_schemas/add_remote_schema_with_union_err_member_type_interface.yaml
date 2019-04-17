@@ -11,6 +11,6 @@ query:
   args:
     name: err-unknown-types
     definition:
-      url: http://localhost:5000/union-graphql-err-subtype-iface
+      url: {{remote_gql_root_url}}/union-graphql-err-subtype-iface
       headers: []
       forward_client_headers: true

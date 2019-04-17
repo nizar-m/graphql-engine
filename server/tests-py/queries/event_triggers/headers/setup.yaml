@@ -23,7 +23,7 @@ args:
       columns: "*"
     delete:
       columns: "*"
-    webhook: http://127.0.0.1:5592
+    webhook: {{evts_webhook_root_url}}
     headers:
     - name: "X-Header-From-Value"
       value: "MyValue"

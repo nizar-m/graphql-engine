@@ -43,6 +43,7 @@ module Hasura.GraphQL.Validate.Types
   , AnnGObject
   , hasNullVal
   , getAnnInpValKind
+  , stripTypenames
   , module Hasura.GraphQL.Utils
   ) where
 
@@ -125,8 +126,8 @@ type ParamMap = Map.HashMap G.Name InpValInfo
 
 -- | location of the type: a hasura type or a remote type
 data TypeLoc
-  = HasuraType
-  | RemoteType RemoteSchemaName RemoteSchemaInfo
+  = TLHasuraType
+  | TLRemoteType !RemoteSchemaName !RemoteSchemaInfo
   deriving (Show, Eq, TH.Lift, Generic)
 
 instance Hashable TypeLoc
@@ -638,3 +639,30 @@ getAnnInpValKind = \case
   AGEnum _ _   -> "enum"
   AGObject _ _ -> "object"
   AGArray _ _  -> "array"
+
+stripTypenames :: [G.ExecutableDefinition] -> [G.ExecutableDefinition]
+stripTypenames = map filterExecDef
+  where
+    filterExecDef = \case
+      G.ExecutableDefinitionOperation opDef  ->
+        G.ExecutableDefinitionOperation $ filterOpDef opDef
+      G.ExecutableDefinitionFragment fragDef ->
+        let newSelset = filterSelSet $ G._fdSelectionSet fragDef
+        in G.ExecutableDefinitionFragment fragDef{G._fdSelectionSet = newSelset}
+
+    filterOpDef  = \case
+      G.OperationDefinitionTyped typeOpDef ->
+        let newSelset = filterSelSet $ G._todSelectionSet typeOpDef
+        in G.OperationDefinitionTyped typeOpDef{G._todSelectionSet = newSelset}
+      G.OperationDefinitionUnTyped selset ->
+        G.OperationDefinitionUnTyped $ filterSelSet selset
+
+    filterSelSet = mapMaybe filterSel
+    filterSel s = case s of
+      G.SelectionField f ->
+        if G._fName f == "__typename"
+        then Nothing
+        else
+          let newSelset = filterSelSet $ G._fSelectionSet f
+          in Just $ G.SelectionField  f{G._fSelectionSet = newSelset}
+      _                  -> Just s

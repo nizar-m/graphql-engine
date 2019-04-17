@@ -10,7 +10,7 @@ args:
       columns: ["c1"]
     delete:
       columns: "*"
-    webhook: http://127.0.0.1:5592/new
+    webhook: {{evts_webhook_root_url}}/new
     retry_conf:
       num_retries: 5
       interval_sec: 5
