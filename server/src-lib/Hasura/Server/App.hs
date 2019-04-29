@@ -133,6 +133,7 @@ data ServerCtx
   , scInstanceId  :: InstanceId
   , scPlanCache   :: E.PlanCache
   , scLQState     :: EL.LiveQueriesState
+  , scDevMode     :: Bool
   }
 
 data HandlerCtx
@@ -216,7 +217,7 @@ mkSpockAction qErrEncoder serverCtx handler = do
 
   -- log result
   logResult (Just userInfo) req reqBody serverCtx resLBS $ Just (t1, t2)
-  either (qErrToResp $ userRole userInfo == adminRole) resToResp resLBS
+  either (qErrToResp $ scDevMode serverCtx) resToResp resLBS
 
   where
     logger = scLogger serverCtx
@@ -323,10 +324,11 @@ mkWaiApp
   -> CorsConfig -> Bool -> Bool
   -> InstanceId -> S.HashSet API
   -> EL.LQOpts
+  -> Bool
   -> IO (Wai.Application, SchemaCacheRef, Maybe UTCTime)
 mkWaiApp isoLevel loggerCtx sqlGenCtx pool httpManager mode corsCfg
          enableConsole enableTelemetry instanceId apis
-         lqOpts = do
+         lqOpts devMode = do
     let pgExecCtx = PGExecCtx pool isoLevel
         pgExecCtxSer = PGExecCtx pool Q.Serializable
     (cacheRef, cacheBuiltTime) <- do
@@ -352,7 +354,7 @@ mkWaiApp isoLevel loggerCtx sqlGenCtx pool httpManager mode corsCfg
           SchemaCacheRef cacheLock cacheRef (E.clearPlanCache planCache)
         serverCtx = ServerCtx pgExecCtx logger
                     schemaCacheRef mode httpManager
-                    sqlGenCtx apis instanceId planCache lqState
+                    sqlGenCtx apis instanceId planCache lqState devMode
 
     spockApp <- spockAsApp $ spockT id $
                 httpApp corsCfg serverCtx enableConsole enableTelemetry

@@ -199,6 +199,7 @@ def validate_gql_ws_q(hge_ctx, query, headers, exp_http_response, retry=False):
         exp_ws_response2 = {'errors': []}
         for err in exp_http_response['errors']:
             ws_err = err['extensions']
+            ws_err.pop('internal', None)
             ws_err['error'] = err['message']
             exp_ws_response2['errors'].append(ws_err)
         exp_ws_response2['data'] = None

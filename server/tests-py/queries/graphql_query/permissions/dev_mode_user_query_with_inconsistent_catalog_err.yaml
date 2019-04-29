@@ -1,0 +1,32 @@
+description: User query with inconsistent catalog
+url: /v1alpha1/graphql
+status: 500
+headers:
+  X-Hasura-Role: user2
+  X-Hasura-Has-Key: age
+response:
+  errors:
+  - message: postgres query error
+    extensions:
+      internal:
+        statement: |- 
+          SELECT  coalesce(json_agg("root" ), '[]' ) AS "root" FROM  (SELECT  row_to_json((SELECT  "_1_e"  FROM  (SELECT  "_0_root.base"."jsonb_col" AS "jsonb_col"       ) AS "_1_e"      ) ) AS "root" FROM  (SELECT  *  FROM "public"."jsonb_table"  WHERE (("public"."jsonb_table"."jsonb_col") ? ((($1->>'x-hasura-has-key'))::text))     ) AS "_0_root.base"      ) AS "_2_root"      
+        prepared: true
+        error:
+          exec_status: FatalError
+          hint: No operator matches the given name and argument type(s). You might need to add explicit type casts.
+          message: |-
+            operator does not exist: text ? text
+          status_code: '42883'
+          description: null
+        arguments:
+        - (Oid 114,Just ("{\"x-hasura-has-key\":\"age\",\"x-hasura-role\":\"user2\"}",Binary))
+      path: $
+      code: unexpected
+query:
+  query: |
+    query {
+      jsonb_table{
+        jsonb_col
+      }
+    }

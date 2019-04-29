@@ -68,6 +68,11 @@ def pytest_addoption(parser):
         help="Run testcases for horizontal scaling"
     )
 
+    parser.addoption(
+        "--test-dev-mode", action="store_true",
+        help="Run Test cases with metadata queries being disabled"
+    )
+
 #By default,
 #1) Set default parallelism to one
 #2) Set test grouping to by filename (--dist=loadfile)
@@ -82,15 +87,17 @@ def pytest_configure(config):
     if is_master(config):
         config.hge_ctx_gql_server = HGECtxGQLServer()
         if not config.getoption('--hge-urls'):
-            print("hge-urls should be specified")
+            pytest.exit("--hge-urls should be specified")
         if not config.getoption('--pg-urls'):
-            print("pg-urls should be specified")
+            pytest.exit("--pg-urls should be specified")
         config.hge_url_list = config.getoption('--hge-urls')
         config.pg_url_list =  config.getoption('--pg-urls')
         if config.getoption('-n', default=None):
             xdist_threads = config.getoption('-n')
-            assert xdist_threads <= len(config.hge_url_list), "Not enough hge_urls specified, Required " + str(xdist_threads) + ", got " + str(len(config.hge_url_list))
-            assert xdist_threads <= len(config.pg_url_list), "Not enough pg_urls specified, Required " + str(xdist_threads) + ", got " + str(len(config.pg_url_list))
+            if xdist_threads > len(config.hge_url_list):
+                pytest.exit("Not enough hge_urls specified, Required " + str(xdist_threads) + ", got " + str(len(config.hge_url_list)))
+            if xdist_threads > len(config.pg_url_list):
+                pytest.exit("Not enough pg_urls specified, Required " + str(xdist_threads) + ", got " + str(len(config.pg_url_list)))
 
     random.seed(datetime.now())
 

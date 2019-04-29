@@ -59,6 +59,7 @@ data RawServeOptions
   , rsoMxRefetchInt       :: !(Maybe LQ.RefetchInterval)
   , rsoMxBatchSize        :: !(Maybe LQ.BatchSize)
   , rsoFallbackRefetchInt :: !(Maybe LQ.RefetchInterval)
+  , rsoDevMode            :: !Bool
   } deriving (Show, Eq)
 
 data ServeOptions
@@ -77,6 +78,7 @@ data ServeOptions
   , soStringifyNum    :: !Bool
   , soEnabledAPIs     :: !(Set.HashSet API)
   , soLiveQueryOpts   :: !LQ.LQOpts
+  , soDevMode         :: !Bool
   } deriving (Show, Eq)
 
 data RawConnInfo =
@@ -263,12 +265,13 @@ mkServeOptions rso = do
   enableTelemetry <- fromMaybe True <$>
                      withEnv (rsoEnableTelemetry rso) (fst enableTelemetryEnv)
   strfyNum <- withEnvBool (rsoStringifyNum rso) $ fst stringifyNumEnv
-  enabledAPIs <- Set.fromList . fromMaybe [METADATA,GRAPHQL] <$>
+  enabledAPIs <- Set.fromList . fromMaybe [METADATA, GRAPHQL] <$>
                      withEnv (rsoEnabledAPIs rso) (fst enabledAPIsEnv)
   lqOpts <- mkLQOpts
+  devMode <- withEnvBool (rsoDevMode rso) $ fst devModeEnv
   return $ ServeOptions port host connParams txIso adminScrt authHook jwtSecret
                         unAuthRole corsCfg enableConsole
-                        enableTelemetry strfyNum enabledAPIs lqOpts
+                        enableTelemetry strfyNum enabledAPIs lqOpts devMode
   where
     mkConnParams (RawConnParams s c i p) = do
       stripes <- fromMaybe 1 <$> withEnv s (fst pgStripesEnv)
@@ -528,7 +531,7 @@ stringifyNumEnv =
 enabledAPIsEnv :: (String, String)
 enabledAPIsEnv =
   ( "HASURA_GRAPHQL_ENABLED_APIS"
-  , "List of comma separated list of allowed APIs. (default: metadata,graphql)"
+  , "Comma separated list of allowed APIs. (default: metadata,graphql)"
   )
 
 parseRawConnInfo :: Parser RawConnInfo
@@ -793,6 +796,12 @@ parseMxBatchSize =
       help (snd mxBatchSizeEnv)
     )
 
+parseDevMode :: Parser Bool
+parseDevMode =
+  switch ( long "dev-mode" <>
+           help (snd devModeEnv)
+         )
+
 mxRefetchDelayEnv :: (String, String)
 mxRefetchDelayEnv =
   ( "HASURA_GRAPHQL_LIVE_QUERIES_MULTIPLEXED_REFETCH_INTERVAL"
@@ -821,6 +830,12 @@ fallbackRefetchDelayEnv =
   ( "HASURA_GRAPHQL_LIVE_QUERIES_FALLBACK_REFETCH_INTERVAL"
   , "results will only be sent once in this interval (in milliseconds) for \
     \live queries which cannot be multiplexed. Default: 1000 (1sec)"
+  )
+
+devModeEnv :: (String, String)
+devModeEnv =
+  ( "HASURA_GRAPHQL_DEV_MODE"
+  , "Enable verbose logging in the API response (default: false)"
   )
 
 -- Init logging related

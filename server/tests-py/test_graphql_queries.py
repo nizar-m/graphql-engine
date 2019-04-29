@@ -128,8 +128,9 @@ class TestGraphQLQueryOffsets(DefaultTestSelectQueries):
     def test_int_as_string_offset(self, hge_ctx, transport):
         check_query_f(hge_ctx, self.dir() + '/select_query_article_string_offset.yaml', transport)
 
-    def test_err_neg_offset_error(self, hge_ctx):
-        check_query_f(hge_ctx, self.dir() + '/select_query_article_neg_offset_error.yaml')
+    @pytest.mark.parametrize("transport", ['http','websocket'])
+    def test_err_neg_offset_error(self, hge_ctx, transport):
+        check_query_f(hge_ctx, self.dir() + '/select_query_article_neg_offset_error.yaml', transport)
 
     @classmethod
     def dir(cls):
