@@ -4,18 +4,18 @@ import time
 import jsondiff
 
 from validate import validate_json, json_equals
+from skip_test_modules import skip_module
 
-skip_if_option_not_set = pytest.mark.skipif(
-    'not config.getoption("--hge-replica-urls")',
-    reason = "option --hge-replica-urls is missing, skipping tests"
-)
+skip_reason = skip_module(__file__)
+if skip_reason:
+    pytest.skip(skip_reason, allow_module_level=True)
 
-pytestmark = skip_if_option_not_set
 
 get_metadata_q =  {
     'args': {},
     'type' :  'metadata_export'
 }
+
 
 def wait_for_metadata_sync(hge_ctx, wait_time=20):
     assert wait_time > 0, "Timeout waiting for metadata sync of replicas"
@@ -24,17 +24,22 @@ def wait_for_metadata_sync(hge_ctx, wait_time=20):
     time.sleep(1)
     return wait_for_metadata_sync(hge_ctx, wait_time - 1)
 
+
 def has_metadata_synced(hge_ctx):
     metadatas = [get_metadata(hge_ctx, hge_url) for hge_url in [hge_ctx.hge_url, hge_ctx.hge_replica_url]]
     return json_equals(metadatas[0], metadatas[1])
 
+
 def get_metadata(hge_ctx, hge_url):
     return hge_ctx.admin_v1q_url(get_metadata_q, hge_url)
 
+
 class TestHorizantalScaleBasic():
+
     servers = {}
 
     dir = 'queries/horizontal_scale/basic'
+
 
     @pytest.fixture(autouse=True, scope='class')
     def transact(self, hge_ctx):
@@ -44,6 +49,7 @@ class TestHorizantalScaleBasic():
         # teardown
         st_code, resp = hge_ctx.admin_v1q_f(self.dir + '/teardown.yaml')
         assert st_code == 200, resp
+
 
     def test_horizontal_scale_basic(self, hge_ctx):
         with open(self.dir + "/steps.yaml") as c:

@@ -1,5 +1,4 @@
 import pytest
-from validate import check_query_f
 from conftest import select_queries_context
 from skip_test_modules import skip_module
 
@@ -13,8 +12,8 @@ class TestHTTPSWebhookInsecure:
     dir = 'webhook/insecure'
 
     def test_user_select_unpublished_articles_err(self, hge_ctx):
-        check_query_f(hge_ctx, self.dir + '/user_select_query_unpublished_articles_fail.yaml')
+        hge_ctx.check_query_f(self.dir + '/user_select_query_unpublished_articles_fail.yaml')
 
     def test_user_only_other_users_published_articles_err(self, hge_ctx):
-        check_query_f(hge_ctx, self.dir + '/user_query_other_users_published_articles_fail.yaml')
+        hge_ctx.check_query_f(self.dir + '/user_query_other_users_published_articles_fail.yaml')
 

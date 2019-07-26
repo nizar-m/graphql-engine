@@ -1,0 +1,48 @@
+- description: User can query jsonb values which satisfies filter in select permission with array session variable
+  url: /v1/graphql
+  status: 200
+  headers:
+    X-Hasura-Role: user5
+    X-Hasura-Json-required-keys: |-
+      {name,age}
+  response:
+    data:
+      jsonb_table:
+      - id: 1
+        jsonb_col:
+          name: Hasura
+          age: 7
+  query:
+    query: |
+      query {
+        jsonb_table{
+          id
+          jsonb_col
+        }
+      }
+
+- description: User can query jsonb values which satisfies filter in select permission with array session variable
+  url: /v1/graphql
+  status: 200
+  headers:
+    X-Hasura-Role: user5
+    X-Hasura-Json-required-keys: |-
+      {}
+  response:
+    data:
+      jsonb_table:
+      - id: 1
+        jsonb_col:
+          age: 7
+          name: Hasura
+      - id: 2
+        jsonb_col:
+          name: Cross
+  query:
+    query: |
+      query {
+        jsonb_table{
+          id
+          jsonb_col
+        }
+      }

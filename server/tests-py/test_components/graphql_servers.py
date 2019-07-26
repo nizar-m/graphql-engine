@@ -1,6 +1,7 @@
 import time
 import subprocess
 import os
+import io
 import signal
 import json
 import dirsync
@@ -15,13 +16,16 @@ from .utils import gen_random_password, gen_rsa_key, gen_ca_keys_and_cert, \
     gen_ca_signed_keys_and_cert, get_public_crt, get_private_pem, \
     get_public_pem, get_unused_port, is_graphql_server_running, run_concurrently
 from webserver import WebServerProcess
-from .test_scenario_conf import hge_scenario_args, hge_scenario_env, scenario_auth_webhook_path, scenario_name
+from .test_conf import hge_scenario_args, hge_scenario_env, scenario_auth_webhook_path, scenario_name, scenario_auth, auth_type
 import itertools
+
 
 class GraphQLServerError(Exception):
     pass
 
+
 class GraphQLServers:
+
 
     default_graphql_env = {
         'HASURA_GRAPHQL_ENABLE_TELEMETRY' : 'false',
@@ -29,26 +33,30 @@ class GraphQLServers:
         'HASURA_GRAPHQL_STRINGIFY_NUMERIC_TYPES' : 'true'
     }
 
-    def __init__(self, pg, hge_config, auth_mode, scenario, output_dir, with_replica = False ):
+
+    def __init__(self, pg, hge_config, scenario, output_dir, conf_hash, with_replica = False ):
         self.scenario = scenario
         self.output_dir = output_dir
         self.pg = pg
         self.hge_config = hge_config
-        self.auth_mode = auth_mode
         self.with_replica = with_replica
+        self.conf_hash = conf_hash
         self.set_initial_values()
+        self.configure_auth()
 
         os.makedirs(output_dir, exist_ok=True)
 
+
+    def configure_auth(self):
+        auth_ty = auth_type(self.scenario)
+
         #Use admin secret for all modes except no authorization mode
-        if self.auth_mode != 'noAuth':
+        if auth_ty != 'noAuth':
             self.admin_secret = gen_random_password()
 
-        if self.auth_mode in ['jwt', 'jwtStringified']:
-            #Configure JWT
+        if auth_ty == 'jwt':
             self.configure_jwt()
-        elif self.auth_mode in ['postWebhook','getWebhook']:
-            #Configure and start auth webhook
+        elif auth_ty == 'webhook':
             self.configure_auth_webhook()
 
 
@@ -67,6 +75,7 @@ class GraphQLServers:
         self.hge_replica_urls = []
         self.hge_index = 0
         self.docker_client = None
+        self.hge_log_files = []
 
 
     def get_scenario_args(self):
@@ -86,7 +95,8 @@ class GraphQLServers:
             'type': 'RS512',
             'key' : get_public_pem(self.jwt_key)
         }
-        if self.auth_mode == 'jwtStringified':
+        jwt_conf = scenario_auth(self.scenario)['jwt']
+        if jwt_conf.get('stringified'):
             self.jwt_conf['claims_format'] = 'stringified_json'
 
 
@@ -95,8 +105,10 @@ class GraphQLServers:
         self.custom_ssl_certs_dir = os.path.abspath(self.output_dir + "/ssl/certs")
         os.makedirs(self.custom_ssl_certs_dir, exist_ok=True)
         #Copy the default SSL certificates
-        with contextlib.redirect_stderr(None):
-            dirsync.sync('/etc/ssl/certs', self.custom_ssl_certs_dir, 'sync')
+        with io.StringIO("")  as f:
+            with contextlib.redirect_stdout(f):
+                dirsync.sync('/etc/ssl/certs', self.custom_ssl_certs_dir, 'sync')
+        f.close()
 
         #Custom SSL CA certificates file
         self.custom_ca_crts_file = self.custom_ssl_certs_dir + "/custom-ca-certificates.crt"
@@ -116,7 +128,8 @@ class GraphQLServers:
         (webhook_key, webhook_cert) = gen_ca_signed_keys_and_cert(ca_key, ca_cert)
 
         self.auth_webhook_ca_crt_file = ssl_certs_dir + '/pytest-webhook.crt'
-        if self.scenario not in ['webhookInsecure']:
+        secure = scenario_auth(self.scenario)['webhook']['secure']
+        if secure:
             #Write CA cert into the custom SSL certs directory
             with open(self.auth_webhook_ca_crt_file, 'w') as f:
                 f.write(get_public_crt(ca_cert))
@@ -145,8 +158,8 @@ class GraphQLServers:
             return None
 
 
-    def setup(self):
-        if self.auth_mode in ['postWebhook','getWebhook']:
+    def run(self):
+        if auth_type(self.scenario) == 'webhook':
             self.run_auth_webhook()
 
         if self.hge_config == 'withStackExec':
@@ -167,10 +180,8 @@ class GraphQLServers:
             env['HASURA_GRAPHQL_JWT_SECRET'] = json.dumps(self.jwt_conf)
         elif self.auth_webhook_root_url:
             env['HASURA_GRAPHQL_AUTH_HOOK'] = self.auth_webhook_url()
-            if self.auth_mode == 'getWebhook':
-                env['HASURA_GRAPHQL_AUTH_HOOK_MODE'] = 'GET'
-            elif self.auth_mode == 'postWebhook':
-                env['HASURA_GRAPHQL_AUTH_HOOK_MODE'] = 'POST'
+            webhook_mode = scenario_auth(self.scenario)['webhook'].get('mode','get').upper()
+            env['HASURA_GRAPHQL_AUTH_HOOK_MODE'] = webhook_mode
             env['SYSTEM_CERTIFICATE_PATH'] = self.custom_ssl_certs_dir
 
         return env
@@ -225,8 +236,9 @@ class GraphQLServers:
     def get_hge_env_and_args(self, port, db_url, evts_webhook_port):
         self.hge_index += 1
         prefix = self.output_dir + '/grapqh-engine-' + str(self.hge_index) + \
-                 '-' + self.auth_mode + '-' + scenario_name(self.scenario)
+                 '-' + auth_type(self.scenario) + '-' + scenario_name(self.scenario) + '-' + self.conf_hash
         log_file = prefix + '.log'
+        self.hge_log_files.append(log_file)
         tix_file = prefix + '.tix'
         tests_info_db.add_hpc_report_file(tix_file)
 
@@ -265,7 +277,7 @@ class GraphQLServers:
             process_args=['graphql-engine', 'serve', *extra_args]
             docker_ports = {str(port)+'/tcp': ('127.0.0.1', port)}
             volumes = {}
-            if self.auth_mode in ['postWebhook', 'getWebhook']:
+            if auth_type(self.scenario) == 'webhook':
                 volumes[self.custom_ssl_certs_dir] = {
                     'bind': self.custom_ssl_certs_dir,
                     'mode': 'ro'

@@ -5,12 +5,15 @@ import functools
 
 sqlite_db = None
 
+def output_dir():
+    return os.environ.get('HASURA_TEST_OUTPUT_FOLDER','graphql-engine-test-output')
+
 def setup_tests_info_db():
     global sqlite_db
     if sqlite_db:
         return True #Tests DB has already been setup
 
-    sqlite_db_env = os.environ.get('HASURA_TEST_INFO_DB')
+    sqlite_db_env = os.environ.get('HASURA_TEST_INFO_DB', output_dir() + '/tests_info.db')
     if not sqlite_db_env:
         return False #Could not get the tests db configuration
 
@@ -119,7 +122,7 @@ def get_hpc_report_files():
 def add_hpc_report_file(hpc_file):
     hpc_file = os.path.abspath(hpc_file)
     with sqlite3.connect(sqlite_db) as conn:
-        query = 'insert into hpc_files (filename) values (?)'
+        query = 'insert or ignore into hpc_files (filename) values (?)'
         conn.execute(query, (hpc_file,))
 
 def sqlite_db_add_used_port(conn, port, pid=None, container_name=None, service_name=None):

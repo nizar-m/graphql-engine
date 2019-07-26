@@ -252,7 +252,8 @@ class TestV1SelectPermissions:
         hge_ctx.check_query_f(self.dir + '/user_can_query_jsonb_values_filter_session_vars.yaml')
 
     def test_user_query_auction(self, hge_ctx):
-        check_query_f(hge_ctx, self.dir() + '/user_query_auction.yaml')
+        hge_ctx.check_query_f(self.dir + '/user_query_auction.yaml')
+
 
 @mutations_context
 class TestV1InsertBasic:
@@ -534,6 +535,12 @@ class TestTrackTables:
 
     dir = "queries/v1/track_table"
 
+    def test_track_table_function_same_name(self, hge_ctx):
+        hge_ctx.check_query_f(self.dir + '/track_table_function_same_name.yaml')
+
+    def test_track_function_table_same_name(self, hge_ctx):
+        hge_ctx.check_query_f(self.dir + '/track_function_table_same_name.yaml')
+
     def test_track_untrack_table(self, hge_ctx):
         hge_ctx.check_query_f(self.dir + '/track_untrack_table.yaml')
         hge_ctx.may_skip_test_teardown = True
@@ -560,3 +567,26 @@ class TestCreatePermission:
 
     def test_create_permission_user_role_error(self, hge_ctx):
         hge_ctx.check_query_f(self.dir + '/create_article_permission_role_user.yaml')
+
+
+class TestNonEmptyText:
+
+    dir = "queries/v1/non_empty_text"
+
+    def test_create_event_trigger(self, hge_ctx):
+        hge_ctx.check_query_f(self.dir + '/create_event_trigger.yaml')
+
+    def test_create_insert_permission(self, hge_ctx):
+        hge_ctx.check_query_f(self.dir + '/create_insert_permission.yaml')
+
+    def test_create_query_collection(self, hge_ctx):
+        hge_ctx.check_query_f(self.dir + '/create_query_collection.yaml')
+
+    def test_create_query_collection_queryname(self, hge_ctx):
+        hge_ctx.check_query_f(self.dir + '/create_query_collection_queryname.yaml')
+
+    def test_create_object_relationship(self, hge_ctx):
+        hge_ctx.check_query_f(self.dir + '/create_object_relationship.yaml')
+
+    def test_create_remote_schema(self, hge_ctx):
+        hge_ctx.check_query_f(self.dir + '/create_remote_schema.yaml')

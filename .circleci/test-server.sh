@@ -76,11 +76,8 @@ mkdir -p "$HASURA_TEST_OUTPUT_FOLDER"
 
 cd $PYTEST_ROOT
 
-#Install tox in virtualenv
-mkdir -p .tox
-virtualenv  --python=python3 -q .tox/tox
-. .tox/tox/bin/activate
-pip3 install tox
+#Install tox in venv
+pipenv install tox
 
 if ! stack exec -- which graphql-engine > /dev/null && [ -z "${HASURA_TEST_GRAPHQL_ENGINE:-}" ] ; then
 	echo "Do 'stack build' before tests, or export the location of executable in the HASURA_TEST_GRAPHQL_ENGINE envirnoment variable"
@@ -106,24 +103,28 @@ rm -f $HASURA_TEST_INFO_DB
 
 p='pgUrl-hgeExec'
 
+#Use two databases for parallel tests. Reduces the time by half. 
+#Most of the tests on event triggers involve a lot of waiting. 
+#The event trigger tests can be run on one and the rest on the another one.
 export HASURA_TEST_PG_URLS="$HASURA_GRAPHQL_DATABASE_URL,$HASURA_GRAPHQL_DATABASE_URL_2"
-for env in $p-{noAuth,adminSecret,jwt,{get,post}Webhook}-default
+for env in $p-{noAuth,adminSecret,{jwt,{get,post}Webhook}Auth}-default
 do
 	echo -e -n "$(time_elapsed) "
 	set -x
-	tox -v -e $env
+	pipenv run tox -v -e $env
 	set +x
 done
 
+#These are much smaller special case tests. Parallelism is not required
 export HASURA_TEST_PG_URLS="$HASURA_GRAPHQL_DATABASE_URL"
 args=""
 for env in $p-postWebhook-websocket{{,No}ReadCookieCorsDisabled,ReadCookieCorsEnabled} \
-           $p-noAuth-{corsDomains,{graphql,metadata}ApiDisabled{Env,Arg},allowListEnabled{Env,Arg},horizontalScaling} \
+           $p-noAuth-{corsDomains,{graphql,metadata}ApiDisabled{Env,Arg},allowListEnabled{Env,Arg},horizontalScaling,logging} \
 	   $p-{post,get}Webhook-webhookInsecure $p-jwtStringified-default ; do
 	[ "$env" = "$p-jwtStringified-default" ] && args='-- test_jwt.py'
 	echo -e -n "$(time_elapsed) "
 	set -x
-	tox -v -e $env $args
+	pipenv run tox -v -e $env $args
 	set +x
 done
 

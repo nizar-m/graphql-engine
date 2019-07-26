@@ -1,0 +1,27 @@
+noAuth: {}
+adminSecret:
+  secret:
+    default: null
+    type: string
+jwt:
+  stringified:
+    default: false
+    type: boolean
+  issuer:
+    default: null
+    type: string
+  audience:
+    default: null
+    type:
+    - string
+    - list
+webhook:
+  mode:
+    default: get
+    type: string
+    allowedValues:
+    - get
+    - post
+  secure:
+    default: true
+    type: boolean

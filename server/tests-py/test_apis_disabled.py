@@ -1,7 +1,7 @@
 #!/usrbin/env python3
 
 import pytest
-from validate import check_query, check_query_f
+from validate import check_query
 from skip_test_modules import skip_module
 
 skip_reason = skip_module(__file__)
@@ -62,7 +62,7 @@ class TestGraphQLEnabled:
     skip_if_flag_set = '--test-graphql-disabled'
 
     def test_graphql_introspection(self, hge_ctx):
-        check_query_f(hge_ctx, "queries/graphql_introspection/introspection_only_kind_of_queryType.yaml")
+        hge_ctx.check_query_f("queries/graphql_introspection/introspection_only_kind_of_queryType.yaml")
 
 
 class TestMetadataEnabled:
@@ -70,9 +70,9 @@ class TestMetadataEnabled:
     skip_if_flag_set = '--test-metadata-disabled'
 
     def test_reload_metadata(self, hge_ctx):
-        check_query_f(hge_ctx, "queries/v1/metadata/reload_metadata.yaml")
+        hge_ctx.check_query_f("queries/v1/metadata/reload_metadata.yaml")
 
     def test_run_sql(self, hge_ctx):
-        check_query_f(hge_ctx, "queries/v1/run_sql/sql_set_timezone.yaml")
+        hge_ctx.check_query_f("queries/v1/run_sql/sql_set_timezone.yaml")
 
 

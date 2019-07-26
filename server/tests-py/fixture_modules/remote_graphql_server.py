@@ -185,12 +185,11 @@ class SampleAuthGraphQL(RequestHandler):
     def post(self, request):
         if not request.json:
             return Response(HTTPStatus.BAD_REQUEST)
-        res = hello_schema.execute(request.json['query'])
+        res = sample_auth_schema.execute(request.json['query'])
         resp = mkJSONResp(res)
         resp.headers['Set-Cookie'] = 'abcd'
         resp.headers['Custom-Header'] = 'custom-value'
         return resp
-
 
 # GraphQL server with interfaces
 
@@ -629,7 +628,7 @@ class HeaderTestGraphQL(RequestHandler):
                                          context=request.headers)
         return mkJSONResp(res)
 
-handlers = MkHandlers({
+gql_server_handlers = MkHandlers({
     '/hello': HelloWorldHandler,
     '/hello-graphql': HelloGraphQL,
     '/user-graphql': UserGraphQL,

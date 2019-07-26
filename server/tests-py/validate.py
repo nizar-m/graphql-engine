@@ -8,8 +8,6 @@ import jsondiff
 import jwt
 import random
 import time
-import jinja2
-from jinja2.exceptions import TemplateSyntaxError
 from fixture_modules.hge_websocket_client import hge_ws_client
 
 def check_keys(keys, obj):
@@ -76,12 +74,14 @@ def assert_access_denied(code, resp, exp_code):
         "actual": {
             "code": code,
             "response": resp
-        }
+        },
+        "exp_code": exp_code
     })
     assert code == exp_code, deniedMsg
-    errors = resp.get('errors',[])
-    assert isinstance(errors, list) and len(errors) > 0, deniedMsg
-    assert errors[0].get('extensions',{}).get('code') == 'access-denied', deniedMsg
+    if exp_code == 200:
+        errors = resp.get('errors',[])
+        assert isinstance(errors, list) and len(errors) > 0, deniedMsg
+        assert errors[0].get('extensions',{}).get('code') == 'access-denied', deniedMsg
 
 
 def assert_access_denied_or_not_found(code, resp, exp_code):
@@ -90,9 +90,19 @@ def assert_access_denied_or_not_found(code, resp, exp_code):
     else:
         assert_access_denied(code, resp, exp_code)
 
+def get_exp_perm_denied_status(conf):
+    if conf['status'] == 404:
+        return 404
+    elif conf['url'].endswith('graphql'):
+        if 'v1alpha1' in conf['url']:
+            return 401
+        else:
+            return 200
+    else:
+        return 401
 
 def test_forbidden_when_admin_secret_reqd(hge_ctx, conf):
-    exp_code = conf['status']
+    exp_code = get_exp_perm_denied_status(conf)
 
     headers = {}
     if 'headers' in conf:
@@ -109,15 +119,17 @@ def test_forbidden_when_admin_secret_reqd(hge_ctx, conf):
 
 
 def test_forbidden_webhook(hge_ctx, conf):
-    exp_code = get_expected_status(conf)
+    exp_code = get_exp_perm_denied_status(conf)
 
     h = {'Authorization': 'Bearer ' + base64.b64encode(base64.b64encode(os.urandom(30))).decode('utf-8')}
     code, resp = hge_ctx.anyq(conf['url'], conf['query'], h)
     assert_access_denied_or_not_found(code, resp, exp_code)
 
+
 def get_claims_fmt(hge_ctx):
     conf = json.loads(hge_ctx.hge_jwt_conf)
     return conf.get('claims_format', 'json')
+
 
 def mk_claims(hge_ctx, claims):
     claims_fmt = get_claims_fmt(hge_ctx)
@@ -142,7 +154,8 @@ def generate_jwt_token(hge_ctx, headers):
     return jwt.encode(claim, hge_ctx.hge_jwt_key, algorithm='RS512').decode('UTF-8')
 
 
-def do_invalid_auth_tests(hge_ctx, conf):
+def do_invalid_http_auth_tests(hge_ctx, conf):
+    headers = conf.get('headers',{})
     secure_webhook_auth = hge_ctx.hge_webhook and len(headers) > 0 and not hge_ctx.webhook_insecure
     admin_secret_reqd = hge_ctx.hge_key and not hge_ctx.hge_webhook and not hge_ctx.hge_jwt_key
     if secure_webhook_auth:
@@ -151,28 +164,25 @@ def do_invalid_auth_tests(hge_ctx, conf):
         test_forbidden_when_admin_secret_reqd(hge_ctx, conf)
 
 
-def add_auth(hge_ctx, headers):
+def add_auth_hdrs(hge_ctx, headers):
     new_hdrs = {}
-    jwt_auth = hge_ctx.hge_jwt_key and len(headers) > 0 and 'X-Hasura-Role' in headers
-    webhook_auth = hge_ctx.hge_webhook and len(headers) > 0
-    admin_secret_auth = hge_ctx.hge_key and len(headers) == 0
-    if jwt_auth:
+    set_jwt_auth = hge_ctx.hge_jwt_key and len(headers) > 0 and 'X-Hasura-Role' in headers
+    set_webhook_auth = hge_ctx.hge_webhook and len(headers) > 0
+    set_admin_secret = hge_ctx.hge_key and not (set_jwt_auth or set_webhook_auth)
+    if set_jwt_auth:
         new_hdrs['Authorization'] = 'Bearer ' +  generate_jwt_token(hge_ctx, headers)
-    elif webhook_auth:
+    elif set_webhook_auth:
         headers['X-Hasura-Auth-Mode'] = 'webhook'
         token = base64.b64encode(json.dumps(headers).encode('utf-8')).decode('utf-8')
         new_hdrs['Authorization'] = 'Bearer ' + token
     else:
         new_hdrs = headers
-        if admin_secret_auth:
+        if set_admin_secret:
             new_hdrs['X-Hasura-Admin-Secret'] = hge_ctx.hge_key
     return new_hdrs
-        
 
 def check_query(hge_ctx, conf, transport='http', add_auth=True):
-    headers = {}
-    if 'headers' in conf:
-        headers = conf['headers']
+    headers = conf.get('headers',{})
 
     # No headers defined in test configuration implies X-Hasura-Role = admin
     # Set `X-Hasura-Role: admin` header randomly
@@ -180,8 +190,9 @@ def check_query(hge_ctx, conf, transport='http', add_auth=True):
         headers['X-Hasura-Role'] = 'admin'
 
     if add_auth:
-        do_invalid_auth_tests(hge_ctx, conf)
-        headers = add_auth(hge_ctx, headers)
+        if transport == 'http':
+            do_invalid_http_auth_tests(hge_ctx, conf)
+        headers = add_auth_hdrs(hge_ctx, headers)
 
     assert transport in ['websocket', 'http'], "Unknown transport type " + transport
     if transport == 'websocket':
@@ -190,7 +201,7 @@ def check_query(hge_ctx, conf, transport='http', add_auth=True):
         assert endpoint.endswith('/graphql')
         print('running on websocket')
         with hge_ws_client(hge_ctx, endpoint) as ws_client:
-            return validate_gql_ws_q(hge_ctx, ws_client, conf['url'], conf['query'], headers, conf['response'], True)
+            return validate_gql_ws_q(hge_ctx, ws_client, conf['query'], headers, conf['response'], True)
     elif transport == 'http':
         print('running on http')
         return validate_http_anyq(hge_ctx, conf['url'], conf['query'], headers,
@@ -223,7 +234,6 @@ def validate_gql_ws_q(hge_ctx, ws_client, query, headers, exp_http_response, ret
 
     assert 'payload' in resp, resp
     validate_json(resp['payload'], exp_ws_payload) 
-
     resp_done = next(query_resp)
     assert resp_done['type'] == 'complete'
     return resp['payload']
@@ -251,16 +261,18 @@ def check_query_yaml_conf(hge_ctx, conf, transport, add_auth):
         hge_ctx.may_skip_test_teardown = conf['status'] != 200
         check_query(hge_ctx, conf, transport, add_auth)
 
+
 def json_equals(resp, exp):
     return jsondiff.diff(resp, exp) == {}
 
+
 def validate_json(resp, exp):
     diff = jsondiff.diff(resp, exp)
-    assert diff == {}, '\n' + dump_explicit_yaml{
+    assert diff == {}, '\n' + dump_explicit_yaml({
       'response' : resp,
       'expected' : exp,
       'diff' : diff
-    }
+    })
 
 
 class ExplicitYamlDumper(yaml.Dumper):

@@ -1,5 +1,5 @@
 import yaml
-from validate import check_query_f, check_query
+from validate import check_query
 from conftest import select_queries_context
 from test_schema_stitching import get_types, get_type_by_name, get_fld_by_name
 

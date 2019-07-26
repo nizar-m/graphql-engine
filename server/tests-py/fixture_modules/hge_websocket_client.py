@@ -15,7 +15,9 @@ def hge_ws_client(hge_ctx, endpoint):
     try:
         yield client
     finally:
-        client.close()
+        threading.Thread(target = client.close).start()
+
+
 
 class HgeWsClient:
 
@@ -27,19 +29,21 @@ class HgeWsClient:
         self.create_conn()
 
     def create_conn(self):
+        self.connected_evt = threading.Event()
         self.ws_queue.queue.clear()
         self.ws_id_query_queues = dict()
         self.ws_active_query_ids = set()
         self._ws = websocket.WebSocketApp(self.ws_url.geturl(), on_message=self._on_message, on_close=self._on_close)
         self.wst = threading.Thread(target=self._ws.run_forever)
         self.wst.daemon = True
-        self.wst.start()
         self.remote_closed = False
-        self.connected = False
         self.init_done = False
+        self.wst.start()
+        print("Creating websocket connection. url:", self.ws_url.geturl())
+        self.connected_evt.wait(5)
 
     def recreate_conn(self):
-        self.teardown()
+        self.close()
         self.create_conn()
 
     def get_ws_event(self, timeout):
@@ -51,8 +55,12 @@ class HgeWsClient:
     def get_ws_query_event(self, query_id, timeout):
         return self.ws_id_query_queues[query_id].get(timeout=timeout)
 
+    def connected(self):
+        return self.connected_evt.isSet()
+
     def send(self, frame):
-        if not self.connected:
+        if not self.connected():
+            print ("Recreating connection")
             self.recreate_conn()
             time.sleep(1)
         if frame.get('type') == 'stop':
@@ -110,9 +118,10 @@ class HgeWsClient:
             yield self.get_ws_query_event(query_id, timeout)
 
     def _on_open(self):
-        self.connected = True
+        self.connected_evt.set()
 
     def _on_message(self, message):
+        self.connected_evt.set()
         json_msg = json.loads(message)
         if 'id' in json_msg:
             query_id = json_msg['id']
@@ -124,17 +133,18 @@ class HgeWsClient:
             #Put event in the correponding query_queue
             self.ws_id_query_queues[query_id].put(json_msg)
         elif json_msg['type'] == 'ka':
-            self.connected = True
+            pass
         else:
             #Put event in the main queue
             self.ws_queue.put(json_msg)
 
     def _on_close(self):
         self.remote_closed = True
-        self.connected = False
+        self.connected_evt.clear()
         self.init_done = False
 
     def close(self):
+        print("Closing websocket")
         if not self.remote_closed:
             self._ws.close()
         self.wst.join()

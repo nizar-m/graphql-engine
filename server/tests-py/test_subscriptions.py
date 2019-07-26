@@ -33,6 +33,8 @@ def init_ws_conn(hge_ctx, ws_client, payload = None):
 
 class TestSubscriptionCtrl(object):
 
+    websocket_endpoint = '/v1/graphql'
+
     def test_init_without_payload(self, hge_ctx, ws_client):
         if hge_ctx.hge_key is not None:
             pytest.skip("Payload is needed when admin secret is set")
@@ -67,6 +69,8 @@ class TestSubscriptionCtrl(object):
 class TestSubscriptionBasic(object):
 
     dir = 'queries/subscriptions/basic'
+
+    websocket_endpoint = '/v1/graphql'
 
     @pytest.fixture(autouse=True)
     def ws_conn_init(self, hge_ctx, ws_client):
@@ -168,17 +172,17 @@ class TestSubscriptionBasic(object):
         ev = ws_client.get_ws_query_event('2',3)
         assert ev['type'] == 'complete' and ev['id'] == '2', ev
 
-
+@select_queries_context
 class TestSubscriptionLiveQueries(object):
 
-    @pytest.fixture(scope='class', autouse=True)
-    def transact(self, request, hge_ctx, ws_client):
-        st_code, resp = hge_ctx.admin_v1q_f(self.dir() + '/setup.yaml')
-        assert st_code == 200, resp
+    dir = 'queries/subscriptions/live_queries'
+
+    websocket_endpoint = '/v1/graphql'
+
+    @pytest.fixture(autouse=True)
+    def init_conn(self, hge_ctx, ws_client):
         init_ws_conn(hge_ctx, ws_client)
         yield
-        st_code, resp = hge_ctx.admin_v1q_f(self.dir() + '/teardown.yaml')
-        assert st_code == 200, resp
 
     def test_live_queries(self, hge_ctx, ws_client):
         '''
@@ -186,7 +190,7 @@ class TestSubscriptionLiveQueries(object):
         '''
         ws_client.init_as_admin()
 
-        with open(self.dir() + "/steps.yaml") as c:
+        with open(self.dir + "/steps.yaml") as c:
             conf = yaml.safe_load(c)
 
         queryTmplt = """
@@ -248,6 +252,3 @@ class TestSubscriptionLiveQueries(object):
         with pytest.raises(queue.Empty):
             ev = ws_client.get_ws_event(3)
 
-    @classmethod
-    def dir(cls):
-        return 'queries/subscriptions/live_queries'

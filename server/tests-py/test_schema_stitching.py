@@ -5,7 +5,8 @@ import requests
 
 import pytest
 
-from validate import check_query_f, check_query
+from conftest import metadata_ops_context
+from validate import check_query
 from skip_test_modules import skip_module
 
 skip_reason = skip_module(__file__)
@@ -44,8 +45,8 @@ def mk_reload_remote_q(name):
         }
     }
 
-def add_remote(hge_ctx, name, url):
-    return hge_ctx.admin_v1q(mk_add_remote_q(name, url))
+def add_remote(hge_ctx, name, url, headers=None, client_hdrs=False):
+    return hge_ctx.admin_v1q(mk_add_remote_q(name, url, headers, client_hdrs))
 
 def remove_remote(hge_ctx, name):
     return hge_ctx.admin_v1q(mk_remove_remote_q(name))
@@ -60,19 +61,18 @@ def get_remote_schemas(hge_ctx):
 def remove_all_remotes(hge_ctx):
     return [remove_remote(hge_ctx, rs) for rs in get_remote_schemas(hge_ctx)]
 
-
 class TestRemoteSchemaBasic:
     """ basic => no hasura tables are tracked """
 
     dir = 'queries/remote_schemas'
 
     @pytest.fixture(autouse=True)
-    def transact(self, hge_ctx, remote_gql_url):
+    def remotes_context(self, hge_ctx, remote_gql_url):
         name = 'simple 1'
         st_code, resp = add_remote(hge_ctx, name, remote_gql_url('/hello-graphql'))
         assert st_code == 200, resp
         yield
-        remove_remote(name)
+        remove_all_remotes(hge_ctx)
 
     def test_add_schema(self, hge_ctx):
         """ check if the remote schema is added in the db """
@@ -88,6 +88,7 @@ class TestRemoteSchemaBasic:
     def test_introspection_as_user(self, hge_ctx):
         hge_ctx.check_query_f('queries/graphql_introspection/introspection_user_role.yaml')
 
+
     def test_remote_query(self, hge_ctx):
         hge_ctx.check_query_f(self.dir + '/basic_query.yaml')
 
@@ -102,17 +103,17 @@ class TestRemoteSchemaBasic:
 
     def test_remove_schema_error(self, hge_ctx):
         """remove remote schema which is not added"""
-        q = mk_delete_remote_q('random name')
-        st_code, resp = hge_ctx.v1q(q)
+        q = mk_remove_remote_q('random name')
+        st_code, resp = hge_ctx.admin_v1q(q)
         assert st_code == 400
         assert resp['code'] == 'not-exists'
 
     def test_reload_remote_schema(self, hge_ctx):
         """reload a remote schema"""
-        st_code, resp = reload_remote(hge_ctx, q)
+        st_code, resp = reload_remote(hge_ctx, 'simple 1')
         assert st_code == 200, resp
 
-    def test_add_second_remote_schema(self, hge_ctx):
+    def test_add_second_remote_schema(self, hge_ctx, remote_gql_url):
         """add 2 remote schemas with different node and types"""
         name = 'my remote'
         st_code, resp = add_remote(hge_ctx, name, remote_gql_url('/user-graphql'))
@@ -125,7 +126,7 @@ class TestRemoteSchemaBasic:
         name = 'my remote interface one'
         st_code, resp = add_remote(hge_ctx, name, remote_gql_url('/character-iface-graphql'))
         assert st_code == 200, resp
-        check_query_f(hge_ctx, self.dir + '/character_interface_query.yaml')
+        hge_ctx.check_query_f(self.dir + '/character_interface_query.yaml')
         st_code, resp = remove_remote(hge_ctx, name)
         assert st_code == 200, resp
 
@@ -169,7 +170,7 @@ class TestRemoteSchemaBasic:
         name = 'my remote union one'
         st_code, resp = add_remote(hge_ctx, name, remote_gql_url('/union-graphql'))
         assert st_code == 200, resp
-        check_query_f(hge_ctx, self.dir + '/search_union_type_query.yaml')
+        hge_ctx.check_query_f(self.dir + '/search_union_type_query.yaml')
         st_code, resp = remove_remote(hge_ctx, name)
         assert st_code == 200, resp
 
@@ -239,7 +240,7 @@ class TestAddRemoteSchemaTbls:
         resp = check_query(hge_ctx, query)
         assert check_introspection_result(resp, ['User', 'hello'], ['user', 'hello'])
 
-    def test_add_schema_duplicate_name(self, hge_ctx):
+    def test_add_schema_duplicate_name(self, hge_ctx, remote_gql_url):
         st_code, resp = add_remote(hge_ctx, 'simple2-graphql', remote_gql_url('/country-graphql'))
         assert st_code == 400, resp
         assert resp['code'] == 'already-exists'
@@ -264,7 +265,7 @@ class TestAddRemoteSchemaTbls:
         st_code, resp = remove_remote(hge_ctx, name)
         assert st_code == 200, resp
 
-    def test_remote_schema_forward_headers(self, hge_ctx):
+    def test_remote_schema_forward_headers(self, hge_ctx, remote_gql_url):
         """
         test headers from client and conf and resolved info gets passed
         correctly to remote schema, and no duplicates are sent. this test just
@@ -272,10 +273,10 @@ class TestAddRemoteSchemaTbls:
         duplicate logic is in the remote schema server
         """
         conf_hdrs = [{'name': 'x-hasura-test', 'value': 'abcd'}]
-        add_remote = mk_add_remote_q('header-graphql',
-                                     'http://localhost:5000/header-graphql',
-                                     headers=conf_hdrs, client_hdrs=True)
-        st_code, resp = hge_ctx.v1q(add_remote)
+        name = 'header-graphql'
+        st_code, resp = add_remote(hge_ctx, name,
+                                   remote_gql_url('/header-graphql'),
+                                   headers=conf_hdrs, client_hdrs=True)
         assert st_code == 200, resp
         q = {'query': '{ wassup }'}
         hdrs = {
@@ -296,11 +297,11 @@ class TestAddRemoteSchemaTbls:
         assert 'data' in res
         assert res['data']['wassup'] == 'Hello world'
 
-        hge_ctx.v1q({'type': 'remove_remote_schema',
-                     'args': {'name': 'header-graphql'}})
+        remove_remote(hge_ctx, name)
         assert st_code == 200, resp
 
-@metadata_opts_context
+
+@metadata_ops_context
 class TestRemoteSchemaQueriesOverWebsocket:
 
     dir = 'queries/remote_schemas'
@@ -309,11 +310,13 @@ class TestRemoteSchemaQueriesOverWebsocket:
 
     teardown_files = dir + '/tbls_teardown.yaml'
 
-    websocket_endpoint = '/v1/query'
+    websocket_endpoint = '/v1/graphql'
 
     @pytest.fixture(autouse=True)
-    def setup_ws_client(ws_client):
+    def setup_ws_client(self, ws_client):
+        print("CONNECTED", ws_client.connected())
         ws_client.init_as_admin()
+        yield
 
     def test_remote_query(self, ws_client):
         query = """
@@ -382,13 +385,12 @@ class TestRemoteSchemaQueriesOverWebsocket:
 class TestRemoteSchemaResponseHeaders():
 
     @pytest.fixture(autouse=True)
-    def transact(self, hge_ctx, remote_gql_url):
+    def remotes_ctx(self, hge_ctx, remote_gql_url):
         name = 'sample-auth'
-        q = add_remote(hge_ctx, name, remote_gql_url('/auth-graphql'))
-        st_code, resp = hge_ctx.admin_v1q(q)
+        st_code, resp = add_remote(hge_ctx, name, remote_gql_url('/auth-graphql'))
         assert st_code == 200, resp
         yield
-        st_code, resp = remove_remote(name)
+        st_code, resp = remove_remote(hge_ctx, name)
         assert st_code == 200, resp
 
     def test_response_headers_from_remote(self, hge_ctx):
@@ -399,7 +401,6 @@ class TestRemoteSchemaResponseHeaders():
         resp = hge_ctx.http.post(hge_ctx.hge_url + '/v1/graphql', json=q,
                                  headers=headers)
         assert resp.status_code == 200
-        print(resp.headers)
         assert ('Set-Cookie' in resp.headers and
                 resp.headers['Set-Cookie'] == 'abcd')
         res = resp.json()

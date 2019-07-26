@@ -20,6 +20,11 @@ from cryptography import x509
 from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives import hashes
 
+
+def output_dir():
+    return os.environ.get('HASURA_TEST_OUTPUT_FOLDER','graphql-engine-test-output')
+
+
 def get_unused_port(start, db_retries=30):
     assert db_retries > 0
     port = start
@@ -33,6 +38,7 @@ def get_unused_port(start, db_retries=30):
         return get_unused_port(port+1, db_retries -1)
     return port
 
+
 def stop_docker_and_collect_logs( cntnr, log_file):
     print(Fore.YELLOW, "Stopping HGE docker container ", cntnr.name, Style.RESET_ALL)
     cntnr.stop()
@@ -43,6 +49,7 @@ def stop_docker_and_collect_logs( cntnr, log_file):
 
     print(Fore.YELLOW, "Removing HGE docker container ", cntnr.name, Style.RESET_ALL)
     cntnr.remove()
+
 
 def pg_create_database(pg_url, db, exists_ok = False):
     run_db_query = True
@@ -62,8 +69,7 @@ def pg_run_sql_without_transaction(pg_url, sql):
 def run_sql(pg_url, sql):
     #print("Postgres url: ", pg_url,", Query: ",sql)
     with sqlalchemy.create_engine(pg_url).connect() as conn:
-        res = conn.execute(sql)
-    return res
+        return conn.execute(sql)
 
 def is_graphql_server_running(hge_url):
     r = requests.get(hge_url+'/v1/version')

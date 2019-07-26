@@ -6,9 +6,10 @@ skip_reason = skip_module(__file__)
 if skip_reason:
     pytest.skip(skip_reason, allow_module_level=True)
 
-transport = pytest.mark.tansport
+def transport(*args):
+    return pytest.mark.transport(*args)
 
-pytestmark = [select_queries_context, transport('http', 'websoket')]
+pytestmark = [select_queries_context, transport('http', 'websocket')]
 
 class TestGraphQLQueryBasic:
 
@@ -53,8 +54,15 @@ class TestGraphQLQueryBasic:
     def test_select_query_user_col_change(self, hge_ctx, transport):
         hge_ctx.check_query_f(self.dir + "/select_query_user_col_change.yaml")
 
-    @transort('http')
+    @transport('http')
     def test_nested_select_with_foreign_key_alter(self, hge_ctx, transport):
+        hge_ctx.check_query_f(self.dir + "/nested_select_with_foreign_key_alter.yaml", transport)
+
+    def test_select_query_user_col_change(self, hge_ctx, transport):
+        hge_ctx.check_query_f(self.dir + "/select_query_user_col_change.yaml")
+
+    def test_nested_select_with_foreign_key_alter(self, hge_ctx, transport):
+        transport = 'http'
         hge_ctx.check_query_f(self.dir + "/nested_select_with_foreign_key_alter.yaml", transport)
 
 
@@ -234,8 +242,16 @@ class TestGraphqlQueryPermissions:
         hge_ctx.check_query_f(self.dir + '/staff_passed_students.yaml', transport)
 
     def test_user_query_auction(self, hge_ctx, transport):
-        hge_ctx.check_query_f(hge_ctx, self.dir() + '/user_query_auction.yaml', transport)
+        hge_ctx.check_query_f(self.dir + '/user_query_auction.yaml', transport)
 
+    def test_jsonb_has_all(self, hge_ctx, transport):
+        hge_ctx.check_query_f(self.dir + '/jsonb_has_all.yaml', transport)
+
+    def test_jsonb_has_any(self, hge_ctx, transport):
+        hge_ctx.check_query_f(self.dir + '/jsonb_has_any.yaml', transport)
+
+    def test_in_and_nin(self, hge_ctx, transport):
+        hge_ctx.check_query_f(self.dir + '/in_and_nin.yaml', transport)
 
 class TestGraphQLQueryBoolExpSearch:
 
@@ -338,25 +354,28 @@ class TestGraphQLQueryOrderBy:
         hge_ctx.check_query_f(self.dir + '/employee_distinct_fail.yaml', transport)
 
 
+@transport('http')
 class TestGraphQLQueryFunctions:
 
     dir = 'queries/graphql_query/functions'
 
+    @transport('http', 'websocket')
     def test_search_posts(self, hge_ctx, transport):
         hge_ctx.check_query_f(self.dir + "/query_search_posts.yaml")
 
+    @transport('http', 'websocket')
     def test_search_posts_aggregate(self, hge_ctx, transport):
         hge_ctx.check_query_f(self.dir + "/query_search_posts_aggregate.yaml")
 
-    @transport('http')
     def test_alter_function_error(self, hge_ctx, transport):
         hge_ctx.check_query_f(self.dir + '/alter_function_error.yaml', transport)
 
-    def test_overloading_function_error(self, hge_ctx):
-        hge_ctx.check_query_f(self.dir + '/overloading_function_error.yaml')
+    def test_overloading_function_error(self, hge_ctx, transport):
+        hge_ctx.check_query_f(self.dir + '/overloading_function_error.yaml', transport)
 
-    def test_query_get_test_uuid(self, hge_ctx):
-        hge_ctx.check_query_f(self.dir + '/query_get_test_uuid.yaml')
+    def test_query_get_test_uuid(self, hge_ctx, transport):
+        hge_ctx.check_query_f(self.dir + '/query_get_test_uuid.yaml', transport)
 
-    def test_query_my_add(self, hge_ctx):
-        hge_ctx.check_query_f(hge_ctx, self.dir() + '/query_my_add.yaml')
+    def test_query_my_add(self, hge_ctx, transport):
+        hge_ctx.check_query_f(self.dir + '/query_my_add.yaml', transport)
+

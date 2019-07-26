@@ -6,17 +6,16 @@ import yaml
 import requests
 import validate
 import jinja2
+from jinja2 import TemplateSyntaxError
 from sqlalchemy import create_engine
 from sqlalchemy.schema import MetaData
 from test_components import auth_webhook
-from fixture_modules.hge_websocket_client import HgeWsClient
-
 
 class HGECtxError(Exception):
     pass
 
 class HGETestSvcsConf:
-    def __init__(self, remote_gql_root_url=None, evts_webhook_root_url=None)
+    def __init__(self, remote_gql_root_url=None, evts_webhook_root_url=None):
         self.remote_gql_root_url = remote_gql_root_url
         self.evts_webhook_root_url = evts_webhook_root_url
 
@@ -24,7 +23,7 @@ class HGETestSvcsConf:
         conf = {}
         for attr in ['remote_gql_root_url', 'evts_webhook_root_url']:
             if getattr(self, attr, None):
-                conf[attr] = attr
+                conf[attr] = getattr(self, attr)
         return conf
 
 
@@ -40,7 +39,7 @@ class HGECtx:
             auth_webhook.verify_auth_webhook(self.hge_webhook)
 
     def __init__(self, hge_url, pg_url, hge_key, hge_webhook, webhook_insecure,
-                 hge_jwt_key_file, hge_jwt_conf, metadata_disabled, ws_read_cookie, hge_replica_url):
+                 hge_jwt_key_file, hge_jwt_conf, metadata_disabled, ws_read_cookie, hge_replica_url, hge_log_file):
 
         self.http = requests.Session()
         self.hge_key = hge_key
@@ -63,8 +62,7 @@ class HGECtx:
         self.ws_read_cookie = ws_read_cookie
 
         self.hge_replica_url = hge_replica_url
-
-        self.ws_client = HgeWsClient(self)
+        self.hge_log_file = hge_log_file
 
         self.verify_webhook()
 
@@ -92,10 +90,8 @@ class HGECtx:
         return resp.status_code, resp.json()
 
     def sql(self, q):
-        conn = self.engine.connect()
-        res  = conn.execute(q)
-        conn.close()
-        return res
+        with self.engine.connect() as conn:
+            return conn.execute(q)
 
     def admin_v1q(self, q, headers = {}):
         return self.admin_v1q_url(q, self.hge_url, headers)

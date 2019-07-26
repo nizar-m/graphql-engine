@@ -1,0 +1,10 @@
+postgres:
+  withDocker:
+    image: circleci/postgres:11.3-alpine-postgis
+    databases:
+    - hgetest1
+    - hgetest2
+graphqlEngine: withStackExec
+pytest:
+  extraArgs : []
+scenario: default
