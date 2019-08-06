@@ -19,9 +19,16 @@ class PyTest:
         #On flag --test-logging, add the test files
         if all([not x.startswith('test_') for x in self.extra_args]):
             args.extend(pytest_scenario_default_tests(self.scenario))
-        print(args)
         if  '--test-logging' in args:
             args.extend(['--hge-log-files', *self.hges.hge_log_files])
+        return args
+
+    def get_hge_docker_args(self):
+        args = []
+        docker_image = self.hges.docker_image
+        if docker_image:
+            version = docker_image.split(':')[1]
+            args.extend(['--hge-version',version])
         return args
 
     def run(self):
@@ -30,6 +37,7 @@ class PyTest:
             '--hge-urls', *self.hges.hge_urls,
             '--pg-urls', *self.pg.db_urls,
             '--evts-webhook-ports', *[str(x) for x in self.hges.evts_webhook_ports],
+            '--remote-gql-ports', *[str(x) for x in self.hges.remote_gql_ports],
             '-rsx'
         ]
         if self.hges.hge_replica_urls and len(self.hges.hge_replica_urls) > 0:
@@ -52,6 +60,7 @@ class PyTest:
             pytest_args.extend(['--hge-webhook', self.hges.auth_webhook_url()])
         pytest_args.extend(self.get_scenario_args())
         pytest_args.append('-v')
+        pytest_args.extend(self.get_hge_docker_args())
         pytest_args.extend(self.extra_args)
         print("Running ", Fore.YELLOW, 'pytest', *pytest_args, Style.RESET_ALL)
         exitStatus = pytest.main(args=pytest_args)

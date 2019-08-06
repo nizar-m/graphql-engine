@@ -1,0 +1,16 @@
+psycopg2-binary
+pytest
+pytest-xdist
+requests
+pyyaml
+websocket-client
+pyjwt>=1.5.3
+jsondiff
+cryptography
+graphene
+colorama
+dirsync
+psutil
+docker
+SQLAlchemy
+Jinja2

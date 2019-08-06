@@ -39,6 +39,7 @@ class TestLogging():
     def _parse_logs(self, hge_ctx):
         # parse the log file into a json list
         log_file = hge_ctx.hge_log_file
+        print("LOG FILE:", log_file)
         if not log_file:
             print('Could not determine log file path to test logging!')
             # force teardown if setup fails

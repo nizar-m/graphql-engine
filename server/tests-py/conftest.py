@@ -87,6 +87,15 @@ def pytest_addoption(parser):
     )
 
     parser.addoption(
+        "--remote-gql-ports",
+        metavar="EVENTS_WEBHOOK_PORTS",
+        type=int,
+        required=False,
+        help="List of ports to be used by event webhooks",
+        nargs='+'
+    )
+
+    parser.addoption(
         "--test-allowlist-queries", action="store_true",
         help="Run Test cases with allowlist queries enabled"
     )
@@ -105,6 +114,13 @@ def pytest_addoption(parser):
         help="List of graphql-engine log files",
         required=False,
         nargs='+'
+    )
+
+    parser.addoption(
+        "--hge-version",
+        metavar="HGE_VERSION",
+        help="Version of Hasura graphql engine. If not specified, the version will be obtained by running get-version.sh",
+        required=False,
     )
 
 
@@ -136,18 +152,19 @@ def pytest_configure(config):
         config.pg_urls = config.getoption('--pg-urls').copy()
 
         xdist_threads = config.getoption('-n', default=None) or 1
-        config.remote_gql_ports = get_unused_ports(6000, xdist_threads)
 
-        if config.getoption('--evts-webhook-ports'):
-            config.evts_webhook_ports = config.getoption('--evts-webhook-ports').copy()
-        else:
-            config.evts_webhook_ports = get_unused_ports(5592, xdist_threads)
+        for (opt, start_port) in ('--evts-webhook-ports', 5592), ('--remote-gql-ports', 6000):
+            attr = opt[2:].replace('-', '_')
+            if config.getoption(opt):
+                setattr(config, attr, config.getoption(opt).copy())
+            else:
+                setattr(config, attr, get_unused_ports(start_port, xdist_threads))
 
         uniq_list = [
             (config.pg_urls, 'Postgres URLs'),
             (config.hge_urls, 'HGE urls'),
             (config.evts_webhook_ports, 'Events webhook ports'),
-            (config.remote_gql_ports, 'Remote GraphQL engine port')
+            (config.remote_gql_ports, 'Remote GraphQL engine ports')
         ]
 
         for (opt, detail) in [('--hge-replica-urls', 'HGE replica urls'),('--hge-log-files', 'HGE log files')]:
@@ -204,11 +221,12 @@ def hge_ctx(request):
             ws_read_cookie = config.getoption('--test-ws-init-cookie'),
             metadata_disabled = config.getoption('--test-metadata-disabled'),
             hge_replica_url = get_config_or_none(config, 'hge-replica-url'),
-            hge_log_file = get_config_or_none(config, 'hge-log-file')
+            hge_log_file = get_config_or_none(config, 'hge-log-file'),
+            hge_version = config.getoption('--hge-version')
         )
     except HGECtxError as e:
         if not is_master(config):
-            #Hack for xdist to show error
+            #Hack to show error with xdist
             config.stderr.write(Style.BRIGHT + '[' + config.slaveinput['workerid'] + '] ' + Fore.RED + 'HGECtxError: ' + str(e) + Style.RESET_ALL)
         pytest.exit(str(e))
 

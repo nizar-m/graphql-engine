@@ -39,7 +39,7 @@ class HGECtx:
             auth_webhook.verify_auth_webhook(self.hge_webhook)
 
     def __init__(self, hge_url, pg_url, hge_key, hge_webhook, webhook_insecure,
-                 hge_jwt_key_file, hge_jwt_conf, metadata_disabled, ws_read_cookie, hge_replica_url, hge_log_file):
+                 hge_jwt_key_file, hge_jwt_conf, metadata_disabled, ws_read_cookie, hge_replica_url, hge_log_file, hge_version):
 
         self.http = requests.Session()
         self.hge_key = hge_key
@@ -66,8 +66,11 @@ class HGECtx:
 
         self.verify_webhook()
 
-        result = subprocess.run(['../../scripts/get-version.sh'], shell=False, stdout=subprocess.PIPE, check=True)
-        self.version = result.stdout.decode('utf-8').strip()
+        self.version = hge_version
+        if not self.version:
+            result = subprocess.run(['../../scripts/get-version.sh'], shell=False, stdout=subprocess.PIPE, check=True)
+            self.version = result.stdout.decode('utf-8').strip()
+
         self.services_conf = HGETestSvcsConf()
 
         if not self.metadata_disabled:

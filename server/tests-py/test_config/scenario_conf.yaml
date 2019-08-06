@@ -75,7 +75,7 @@ horizontalScaling:
 allowListEnabledEnv: &allowListEnv
   hge:
     env:
-      HASURA_GRAPHQL_ENABLE_ALLOWLIST: true
+      HASURA_GRAPHQL_ENABLE_ALLOWLIST: 'true'
   pytest:
     defaultTests:
     - test_allowlist_queries.py
@@ -102,7 +102,7 @@ insecurePostWebhook:
     webhook:
       mode: post
       secure: false
-logging:
+queryLogs:
   pytest:
     defaultTests:
     - test_logging.py

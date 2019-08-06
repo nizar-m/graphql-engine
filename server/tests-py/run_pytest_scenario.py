@@ -8,6 +8,7 @@ from test_components import Postgres, GraphQLServers, PyTest, PyTestError
 from test_components.test_conf import validate_scenario, auth_type, pg_use_pgbouncer_proxy, with_hge_replica, scenario_name, default_test_conf, scenario_auth_or_none, validate_auth
 from test_components.tests_info_db import output_dir
 from colorama import Fore, Style
+import logging
 
 class TestScenarioError(Exception):
     pass
@@ -62,7 +63,7 @@ class TestScenario:
             self.pg.setup()
             self.hges.run()
             self.pytest.run()
-            if self.test_scenario in ['horizontalScaling']:
+            if scenario_name(self.test_scenario) in ['horizontalScaling']:
                 self.repeat_with_pgbouncer_restart()
         except PyTestError as e:
             print (Fore.RED + Style.BRIGHT + repr(e) + Style.RESET_ALL)
@@ -89,7 +90,12 @@ class TestCases:
         self.set_arg_parse_options()
         self.pytest_args = []
         self.test_cases = []
+        self.set_log_level()
         self.get_test_cases()
+
+    def set_log_level(self):
+        LOGLEVEL = os.environ.get('HASURA_TEST_LOGLEVEL','WARNING')
+        logging.basicConfig(level=LOGLEVEL)
 
     def set_pg_options(self):
         self.arg_parser.add_argument('--pg-urls', metavar='HASURA_TEST_PG_URLS', help='Postgres database urls to be used for tests', required=False)

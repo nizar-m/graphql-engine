@@ -11,7 +11,8 @@ import psycopg2
 from colorama import Fore, Style
 from .  import tests_info_db
 import os
-import threading
+import io
+import contextlib
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -24,6 +25,10 @@ from cryptography.hazmat.primitives import hashes
 def output_dir():
     return os.environ.get('HASURA_TEST_OUTPUT_FOLDER','graphql-engine-test-output')
 
+def discard_stdout(f, args=[]):
+    with io.StringIO('') as o:
+        with contextlib.redirect_stdout(o):
+            f(*args)
 
 def get_unused_port(start, db_retries=30):
     assert db_retries > 0

@@ -109,7 +109,7 @@ refs:
           mkdir -p /usr/share/man/man{1,7}
           apt-get update
           apt install --yes pgbouncer jq curl postgresql-client
-          pip3 install virtualenv
+          pip3 install tox
     - run:
         name: Ensure databases are present
         environment:

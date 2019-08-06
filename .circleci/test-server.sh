@@ -76,8 +76,7 @@ mkdir -p "$HASURA_TEST_OUTPUT_FOLDER"
 
 cd $PYTEST_ROOT
 
-#Install tox in venv
-pipenv install tox
+pip3 install tox
 
 if ! stack exec -- which graphql-engine > /dev/null && [ -z "${HASURA_TEST_GRAPHQL_ENGINE:-}" ] ; then
 	echo "Do 'stack build' before tests, or export the location of executable in the HASURA_TEST_GRAPHQL_ENGINE envirnoment variable"
@@ -107,24 +106,25 @@ p='pgUrl-hgeExec'
 #Most of the tests on event triggers involve a lot of waiting. 
 #The event trigger tests can be run on one and the rest on the another one.
 export HASURA_TEST_PG_URLS="$HASURA_GRAPHQL_DATABASE_URL,$HASURA_GRAPHQL_DATABASE_URL_2"
-for env in $p-{noAuth,adminSecret,{jwt,{get,post}Webhook}Auth}-default
+for env in $p-{no,adminSecret,jwt,{get,post}Webhook}Auth-default
 do
 	echo -e -n "$(time_elapsed) "
 	set -x
-	pipenv run tox -v -e $env
+	tox -v -e $env
 	set +x
 done
 
 #These are much smaller special case tests. Parallelism is not required
 export HASURA_TEST_PG_URLS="$HASURA_GRAPHQL_DATABASE_URL"
 args=""
-for env in $p-postWebhook-websocket{{,No}ReadCookieCorsDisabled,ReadCookieCorsEnabled} \
-           $p-noAuth-{corsDomains,{graphql,metadata}ApiDisabled{Env,Arg},allowListEnabled{Env,Arg},horizontalScaling,logging} \
-	   $p-{post,get}Webhook-webhookInsecure $p-jwtStringified-default ; do
-	[ "$env" = "$p-jwtStringified-default" ] && args='-- test_jwt.py'
+for env in $p-websocket{{,No}ReadCookieCorsDisabled,ReadCookieCorsEnabled} \
+           $p-corsDomains $p-{graphql,metadata}ApiDisabled{Env,Arg} \
+ 	   $p-allowListEnabled{Env,Arg} $p-horizontalScaling $p-queryLogs \
+           $p-insecure{Post,Get}Webhook $p-jwtStringified \
+           $p-jwtWith{Issuer,Audience{,List}} ; do
 	echo -e -n "$(time_elapsed) "
 	set -x
-	pipenv run tox -v -e $env $args
+	tox -v -e $env $args
 	set +x
 done
 

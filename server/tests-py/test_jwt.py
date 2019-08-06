@@ -419,7 +419,7 @@ class TestJwtIssuerCheck():
                 'message': 'Could not verify JWT: JWTNotInIssuer'
             }]
         }
-        self.conf['url'] = endpoint
+        endpoint = self.conf['url']
         if endpoint == '/v1/graphql':
             self.conf['status'] = 200
         if endpoint == '/v1alpha1/graphql':

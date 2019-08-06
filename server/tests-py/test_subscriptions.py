@@ -28,7 +28,7 @@ def init_ws_conn(hge_ctx, ws_client, payload = None):
         'payload': payload,
     }
     ws_client.send(init_msg)
-    ev = ws_client.get_ws_event(3)
+    ev = ws_client.get_ws_event(15)
     assert ev['type'] == 'connection_ack', ev
 
 class TestSubscriptionCtrl(object):

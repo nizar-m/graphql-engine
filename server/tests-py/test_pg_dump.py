@@ -1,14 +1,15 @@
 import yaml
 import os
 from conftest import per_class_db_context
+from packaging.version import Version
 
-resp_pg_version_map = {
-    '9_5': 'response_9',
-    '9_6': 'response_9',
-    '10_6': 'response_10_11',
-    '11_1': 'response_10_11',
-    'latest': 'response_10_11'
-}
+
+def get_resp_type(ver):
+    if Version(ver) < Version('10.0.0'):
+        return 'response_9' 
+    else:
+        return 'response_10_11'
+
 
 @per_class_db_context
 class TestPGDump:
@@ -16,8 +17,9 @@ class TestPGDump:
     dir = 'pgdump'
 
     def test_pg_dump_for_public_schema(self, hge_ctx):
+        res = hge_ctx.sql('SHOW server_version')
+        pg_version = res.fetchone()['server_version']
         query_file = self.dir + '/pg_dump_public.yaml'
-        PG_VERSION = os.getenv('PG_VERSION', 'latest')
         with open(query_file, 'r') as stream:
             q = yaml.safe_load(stream)
             headers = {}
@@ -26,5 +28,5 @@ class TestPGDump:
             resp = hge_ctx.http.post(hge_ctx.hge_url + q['url'], json=q['query'], headers=headers)
             body = resp.text
             assert resp.status_code == q['status'], body
-            assert body == q[resp_pg_version_map[PG_VERSION]], body
+            assert body == q[get_resp_type(pg_version)], body
 
