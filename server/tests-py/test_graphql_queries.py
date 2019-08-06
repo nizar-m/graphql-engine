@@ -99,6 +99,9 @@ class TestGraphQLQueryAggPerm:
     def test_author_articles_agg_fail(self, hge_ctx, transport):
         hge_ctx.check_query_f(self.dir + '/author_articles_agg_fail.yaml', transport)
 
+    def test_author_post_agg_order_by(self, hge_ctx, transport):
+        hge_ctx.check_query_f(self.dir + '/author_post_agg_order_by.yaml', transport)
+
 
 class TestGraphQLQueryLimits:
 
@@ -317,6 +320,15 @@ class TestGraphQLQueryBoolExpPostGIS:
 
     def test_query_geography_spatial_ops(self, hge_ctx, transport):
         hge_ctx.check_query_f(self.dir + '/query_geography_spatial_ops.yaml', transport)
+
+    def test_query_cast_geometry_to_geography(self, hge_ctx, transport):
+        hge_ctx.check_query_f(self.dir + '/query_cast_geometry_to_geography.yaml', transport)
+
+    def test_query_cast_geography_to_geometry(self, hge_ctx, transport):
+        hge_ctx.check_query_f(self.dir + '/query_cast_geography_to_geometry.yaml', transport)
+
+    def test_query_illegal_cast_is_not_allowed(self, hge_ctx, transport):
+        hge_ctx.check_query_f(self.dir + '/query_illegal_cast_is_not_allowed.yaml', transport)
 
 
 class TestGraphQLQueryOrderBy:

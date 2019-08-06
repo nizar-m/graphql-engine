@@ -6,7 +6,7 @@ refs:
       command: |
         if [ -f /build/ciignore/skip_job.txt ]; then
           echo "halting job due to /build/ciignore/skip_job.txt"
-          circleci-agent step halt
+          #circleci-agent step halt
         else
           echo "no skip_job file present, full steam ahead"
         fi
