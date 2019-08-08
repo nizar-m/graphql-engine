@@ -100,6 +100,8 @@ echo -e   "INFO: Logs Folder        : $HASURA_TEST_OUTPUT_FOLDER\n"
 export HASURA_TEST_INFO_DB="$HASURA_TEST_OUTPUT_FOLDER/test_info.db"
 rm -f $HASURA_TEST_INFO_DB
 
+export HASURA_TEST_HGE_RTS_OPTS='-N2'
+
 p='pgUrl-hgeExec'
 
 #Use two databases for parallel tests. Reduces the time by half. 
@@ -110,13 +112,12 @@ for env in $p-{no,adminSecret,jwt,{get,post}Webhook}Auth-default
 do
 	echo -e -n "$(time_elapsed) "
 	set -x
-	tox -v -e $env
+	python3 -m tox -v -e $env
 	set +x
 done
 
 #These are much smaller special case tests. Parallelism is not required
 export HASURA_TEST_PG_URLS="$HASURA_GRAPHQL_DATABASE_URL"
-args=""
 for env in $p-websocket{{,No}ReadCookieCorsDisabled,ReadCookieCorsEnabled} \
            $p-corsDomains $p-{graphql,metadata}ApiDisabled{Env,Arg} \
  	   $p-allowListEnabled{Env,Arg} $p-horizontalScaling $p-queryLogs \
@@ -124,7 +125,7 @@ for env in $p-websocket{{,No}ReadCookieCorsDisabled,ReadCookieCorsEnabled} \
            $p-jwtWith{Issuer,Audience{,List}} ; do
 	echo -e -n "$(time_elapsed) "
 	set -x
-	tox -v -e $env $args
+	python3 -m tox -v -e $env
 	set +x
 done
 

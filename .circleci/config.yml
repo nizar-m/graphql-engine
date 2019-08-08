@@ -6,7 +6,7 @@ refs:
       command: |
         if [ -f /build/ciignore/skip_job.txt ]; then
           echo "halting job due to /build/ciignore/skip_job.txt"
-          circleci-agent step halt
+          #circleci-agent step halt
         else
           echo "no skip_job file present, full steam ahead"
         fi
@@ -109,7 +109,7 @@ refs:
           mkdir -p /usr/share/man/man{1,7}
           apt-get update
           apt install --yes pgbouncer jq curl postgresql-client
-          pip3 install tox
+          python3 -m pip install tox
     - run:
         name: Ensure databases are present
         environment:
@@ -123,9 +123,9 @@ refs:
           GHCRTS: -N1
           HASURA_GRAPHQL_DATABASE_URL: 'postgres://gql_test:@localhost:5432/gql_test'
           HASURA_GRAPHQL_DATABASE_URL_2: 'postgres://gql_test:@localhost:5432/gql_test2'
-          GRAPHQL_ENGINE: '/build/_server_output/graphql-engine'
+          HASURA_TEST_GRAPHQL_ENGINE: '/build/_server_output/graphql-engine'
         command: |
-          OUTPUT_FOLDER=/build/_server_test_output/$PG_VERSION .circleci/test-server.sh
+          HASURA_TEST_OUTPUT_FOLDER=/build/_server_test_output/$PG_VERSION .circleci/test-server.sh
     - run:
         name: Generate coverage report
         working_directory: ./server
@@ -238,7 +238,7 @@ jobs:
     docker:
     - image: hasura/graphql-engine-server-builder:20190507-1
       # TODO: change this to circleci postgis when they have one for pg 11
-    - image: mdillon/postgis:11-alpine
+    - image: circleci/postgres:11.1-alpine-postgis
       <<: *test_pg_env
 
   pytest_server_pg_10.6:

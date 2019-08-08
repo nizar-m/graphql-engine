@@ -1,5 +1,6 @@
 import docker
 import time
+import tempfile
 from .utils import get_unused_port, gen_random_password, pg_create_database, run_sql, run_concurrently
 from .pgbouncer import PGBouncer
 import os
@@ -64,7 +65,14 @@ class Postgres:
 
         for i,db_url in enumerate(db_urls):
             conf_dir = self.output_dir + "/pgbouncer_" + str(port)
-            os.makedirs(conf_dir, exist_ok=True)
+            if os.getuid() == 0:
+                conf_dir_orig = conf_dir
+                conf_dir = tempfile.gettempdir() + '/pgbouncer_' + str(port)
+                try:
+                    os.remove(conf_dir_orig)
+                    os.symlink(conf_dir, conf_dir_orig)
+                except Exception:
+                    pass
             pgb_proxy = PGBouncer(db_url, conf_dir, port)
             pgb_proxy.start()
             print(Fore.YELLOW, "pgbouncer proxy:", Fore.BLUE + db_url,

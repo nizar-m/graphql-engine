@@ -19,7 +19,6 @@ extra-deps:
 - git: https://github.com/hasura/ci-info-hs.git
   commit: ad6df731584dc89b72a6e131687d37ef01714fe8
 - ginger-0.8.4.0
-- focus-1.0.1.3@sha256:adfb0c747394e5dc5d4839167b95f6f9673162b68eb7e7cf11ba39ddf648f8e8
 
 # extra dep for pg-client-hs
 - select-0.4.0.1

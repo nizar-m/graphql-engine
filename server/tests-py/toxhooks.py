@@ -18,7 +18,7 @@ def _set_hge_beta_docker_image(env_conf):
 
 
 def _is_scenario_factor(factor):
-    if any([factor.startswith(x) for x in ('pgDocker','hgeDocker')]):
+    if any([factor.startswith(x) for x in ('pgDocker','hgeDocker','py')]):
         return False
     if factor.endswith('Auth'):
         return False

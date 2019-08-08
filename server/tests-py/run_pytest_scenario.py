@@ -105,6 +105,7 @@ class TestCases:
     def set_hge_options(self):
         self.arg_parser.add_argument('--hge-docker-image', metavar='HASURA_TEST_HGE_DOCKER_IMAGE', help='Docker image to be used for tests', required=False)
         self.arg_parser.add_argument('--hge-executable', metavar='HASURA_TEST_GRAPHQL_ENGINE', help='GraphQL engine executable to be used for tests', required=False)
+        self.arg_parser.add_argument('--hge-rts-opts', metavar='HASURA_TEST_HGE_RTS_OPTS', help='rts opts for GraphQL engine', required=False)
 
 
     def set_scenario_options(self):
@@ -126,7 +127,6 @@ class TestCases:
         self.set_auth_options()
         self.set_scenario_options()
         self.set_pytest_args_option()
-
 
     def parse_args(self):
         self.parsed_args = self.arg_parser.parse_args()
@@ -203,6 +203,11 @@ class TestCases:
             conf['graphqlEngine'] = {
                 'withExecutable' : executable
             }
+
+        rts_opts = self.get_param('hge_rts_opts', 'HASURA_TEST_HGE_RTS_OPTS')
+        print("DEBUG RTS OPTS", rts_opts)
+        if rts_opts:
+            conf['graphqlEngine']['rtsOpts'] = rts_opts.split(" ")
 
 
     def set_scenario_from_args(self, conf):

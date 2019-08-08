@@ -14,3 +14,4 @@ psutil
 docker
 SQLAlchemy
 Jinja2
+sh

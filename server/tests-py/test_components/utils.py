@@ -13,6 +13,8 @@ from .  import tests_info_db
 import os
 import io
 import contextlib
+import pwd
+import subprocess
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -225,3 +227,26 @@ def run_concurrently(threads):
 
     for t in threads:
         t.join()
+
+def popen_user(user, p_args, **kwargs):
+    pw_rec = pwd.getpwnam(user)
+    user_name = pw_rec.pw_name
+    user_home_dir = pw_rec.pw_dir
+    user_uid = pw_rec.pw_uid
+    user_gid = pw_rec.pw_gid
+    if 'env' in kwargs:
+        env = kwargs['env']
+    else:
+        env = os.environ.copy()
+    env['HOME'] = user_home_dir
+    env['LOGNAME']  = user_name
+    env['USER']  = user_name
+    kwargs['preexec_fn'] = demote(user_uid, user_gid)
+    return subprocess.Popen(p_args, **kwargs)
+
+
+def demote(user_uid, user_gid):
+    def result():
+        os.setgid(user_gid)
+        os.setuid(user_uid)
+    return result

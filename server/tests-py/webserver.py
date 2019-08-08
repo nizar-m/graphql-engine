@@ -136,10 +136,11 @@ class WebServer(http.HTTPServer):
         super().__init__(server_address, handler, bind_and_activate=False)
         if ssl_certs:
             (self.keyfile, self.crtfile) = ssl_certs
-            self.socket = ssl.SSLSocket(
-                socket.socket(self.address_family,self.socket_type),
-                keyfile = self.keyfile,
-                certfile = self.crtfile
+            ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+            ssl_ctx.load_cert_chain(self.crtfile, self.keyfile)
+            self.socket = ssl_ctx.wrap_socket(
+                socket.socket(self.address_family, self.socket_type),
+                server_side = True
             )
         self.server_bind()
         self.server_activate()

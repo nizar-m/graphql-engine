@@ -1,12 +1,14 @@
 import shutil
 from urllib.parse import urlparse
-from .utils import run_sql, gen_random_password
+from .utils import run_sql, gen_random_password, popen_user
 from . import tests_info_db
 import subprocess
 import time
 import os
+import pwd
 import psycopg2
 from colorama import Fore, Style
+from pathlib import Path
 
 
 class PGBouncerError(Exception):
@@ -83,6 +85,14 @@ admin_users = {pgb_user}
 
     db_uri_template = "postgresql://{user}:{password}@localhost:{port}/{db}"
 
+    def set_pgbouncer_files_owner(self, user):
+        if os.getuid() == 0:
+            pw_rec = pwd.getpwnam(user)
+            uid = pw_rec.pw_uid
+            gid = pw_rec.pw_gid
+            for f in [self.conf_dir, self.auth_file, self.ini_file, self.log_file]:
+                os.chown(f, uid, gid)
+
     def get_pgbouncer_url(self):
         return self.db_uri_template.format(
             user = self.user,
@@ -101,12 +111,19 @@ admin_users = {pgb_user}
 
     def start(self):
         print(Fore.YELLOW, "Starting PGBouncer proxy on port " + str(self.port), Style.RESET_ALL)
+        os.makedirs(self.conf_dir, exist_ok=True)
         self.create_auth_file()
         self.create_ini_file()
+        Path(self.log_file).touch()
         pgbouncer_args = ['pgbouncer', '-d', self.ini_file]
-        self.process = subprocess.Popen(
-            pgbouncer_args
-        )
+        if os.getuid() == 0:
+            user = 'nobody'
+            self.set_pgbouncer_files_owner(user)
+            self.process = popen_user(user, pgbouncer_args)
+        else:
+            self.process = subprocess.Popen(
+                pgbouncer_args
+            )
         tests_info_db.add_reserved_process_port(self.port, self.process.pid, 'pgbouncer')
 
     def stop(self):

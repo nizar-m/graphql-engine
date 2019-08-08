@@ -11,6 +11,8 @@ import sys
 import os
 import socket
 import pathlib
+import tempfile
+import shutil
 from colorama import Fore, Style
 from skip_test_modules import set_skip_test_module_rules
 
@@ -151,6 +153,8 @@ def pytest_configure(config):
         config.hge_urls = config.getoption('--hge-urls').copy()
         config.pg_urls = config.getoption('--pg-urls').copy()
 
+        config.tmpdir = tempfile.mkdtemp()
+
         xdist_threads = config.getoption('-n', default=None) or 1
 
         for (opt, start_port) in ('--evts-webhook-ports', 5592), ('--remote-gql-ports', 6000):
@@ -182,8 +186,8 @@ def pytest_configure(config):
     set_skip_test_module_rules(config)
     #pytest modifies stderr to capture the test outputs, which also prevents from showing errors during pytest.exit(err)
     #Saving the original stderr to config so that errors can be shown
-    config.stderr = sys.stderr
     random.seed()
+
 
 @pytest.hookimpl(optionalhook=True)
 def pytest_configure_node(node):
@@ -194,9 +198,22 @@ def pytest_configure_node(node):
         if hasattr(node.config, attr + 's'):
             node.slaveinput[attr] = getattr(node.config, attr + 's').pop()
 
-#We cannot override a class level parametrization with a function level one (while using pytest.mark.parmetrize).
-#So we are using the 'transport' marker for overrides.
-#The closest 'transport' marker is used to parametrize tests.
+    node.slaveinput['tmpdir'] = node.config.tmpdir
+
+
+def pytest_unconfigure(config):
+    if is_master(config):
+        try:
+            for filename in os.listdir(config.tmpdir):
+                with open(config.tmpdir + "/" + filename) as f:
+                    sys.stderr.write(f.read())
+        finally:
+            shutil.rmtree(config.tmpdir)
+
+
+#We cannot override a class level parameterization with a function level one in pytest (while using pytest.mark.parametrize).
+#So we are using the 'transport' marker to implement overrides.
+#With the following function, the closest 'transport' marker is used to parameterize tests.
 def pytest_generate_tests(metafunc):
     transport = metafunc.definition.get_closest_marker('transport')
     if transport:
@@ -226,8 +243,9 @@ def hge_ctx(request):
         )
     except HGECtxError as e:
         if not is_master(config):
-            #Hack to show error with xdist
-            config.stderr.write(Style.BRIGHT + '[' + config.slaveinput['workerid'] + '] ' + Fore.RED + 'HGECtxError: ' + str(e) + Style.RESET_ALL)
+            log_file = config.slaveinput['tmpdir'] + "/" + config.slaveinput['workerid'] + "_err.log"
+            with open(log_file, 'w') as f:
+                f.write(Style.BRIGHT + '[' + config.slaveinput['workerid'] + '] ' + Fore.RED + 'HGECtxError: ' + str(e) + Style.RESET_ALL + '\n')
         pytest.exit(str(e))
 
     yield hge_ctx  # provide the fixture value

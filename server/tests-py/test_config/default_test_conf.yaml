@@ -4,7 +4,10 @@ postgres:
     databases:
     - hgetest1
     - hgetest2
-graphqlEngine: withStackExec
+graphqlEngine:
+  withStackExec:
+    stackExecArgs: []
+  rtsOpts: []
 pytest:
   extraArgs : []
 scenario: default
