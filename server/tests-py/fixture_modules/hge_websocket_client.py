@@ -139,6 +139,7 @@ class HgeWsClient:
             self.ws_queue.put(json_msg)
 
     def _on_close(self):
+        print("Received remote close message")
         self.remote_closed = True
         self.connected_evt.clear()
         self.init_done = False

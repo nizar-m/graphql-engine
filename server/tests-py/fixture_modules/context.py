@@ -10,6 +10,7 @@ from jinja2 import TemplateSyntaxError
 from sqlalchemy import create_engine
 from sqlalchemy.schema import MetaData
 from test_components import auth_webhook
+import test_version
 
 class HGECtxError(Exception):
     pass
@@ -80,6 +81,11 @@ class HGECtx:
               self.teardown()
               raise HGECtxError(repr(e))
           assert st_code == 200, resp
+
+        try:
+            test_version.TestServerVersion().test_version(self)
+        except AssertionError as e:
+            raise HGECtxError("version mismach: " + repr(e))
 
     def reflect_tables(self):
         self.meta.reflect(bind=self.engine)
