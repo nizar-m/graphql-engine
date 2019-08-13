@@ -250,3 +250,10 @@ def demote(user_uid, user_gid):
         os.setgid(user_gid)
         os.setuid(user_uid)
     return result
+
+def remove_if_present(f):
+    if f:
+        try:
+            os.remove(f)
+        except FileNotFoundError:
+            pass

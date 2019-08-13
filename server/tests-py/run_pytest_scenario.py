@@ -60,11 +60,13 @@ class TestScenario:
 
     def run(self):
         try:
+            os.environ['HASURA_TEST_SUCCESS'] = 'false'
             self.pg.setup()
             self.hges.run()
             self.pytest.run()
             if scenario_name(self.test_scenario) in ['horizontalScaling']:
                 self.repeat_with_pgbouncer_restart()
+            os.environ['HASURA_TEST_SUCCESS'] = 'true'
         except PyTestError as e:
             print (Fore.RED + Style.BRIGHT + repr(e) + Style.RESET_ALL)
             sys.exit(1)

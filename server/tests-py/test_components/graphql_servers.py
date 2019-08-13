@@ -13,7 +13,7 @@ from . import tests_info_db
 from .utils import gen_random_password, gen_rsa_key, gen_ca_keys_and_cert, \
     gen_ca_signed_keys_and_cert, get_public_crt, get_private_pem, \
     get_public_pem, get_unused_port, is_graphql_server_running, \
-    run_concurrently, discard_stdout
+    run_concurrently, discard_stdout, remove_if_present
 from webserver import WebServerProcess
 from .test_conf import hge_scenario_args, hge_scenario_env, \
     scenario_auth_webhook_path, scenario_name, scenario_auth, auth_type
@@ -58,8 +58,6 @@ class GraphQLServers:
             self.admin_secret = gen_random_password()
         if auth_ty == 'jwt':
             self.configure_jwt()
-        elif auth_ty == 'webhook':
-            self.configure_auth_webhook()
 
     def set_initial_values(self):
         self.admin_secret = None
@@ -173,6 +171,7 @@ class GraphQLServers:
 
     def run(self):
         if auth_type(self.scenario) == 'webhook':
+            self.configure_auth_webhook()
             self.run_auth_webhook()
         rts_opts = self.hge_config.get('rtsOpts', [])
         if self.hge_config.get('withStackExec'):
@@ -506,21 +505,15 @@ class GraphQLServers:
         self.evts_webhook_ports = []
         self.remote_gql_ports = []
 
-    def remove_webhook_ssl(self):
-        if self.auth_webhook_ca_crt_file:
-            try:
-                os.remove(self.auth_webhook_ca_crt_file)
-                self.auth_webhook_ca_crt_file = None
-            except Exception:
-                pass
-            try:
-                os.remove(self.custom_ca_crts_file)
-            except Exception:
-                pass
+    def remove_webhook_ssl_conf(self):
+        if auth_type(self.scenario) == 'webhook' and os.environ.get('HASURA_TEST_SUCCESS') == 'true':
+            shutil.rmtree(self.ssl_root_dir(), ignore_errors=True)
+        else:
+            remove_if_present(self.custom_ca_crts_file)
 
     def teardown(self):
         self.stop_hge_processes()
         self.stop_hge_dockers()
         self.stop_auth_webhook()
-        self.remove_webhook_ssl()
+        self.remove_webhook_ssl_conf()
         self.clear_vars_on_teardown()
