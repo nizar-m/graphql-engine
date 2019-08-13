@@ -70,6 +70,9 @@ class Postgres:
                 conf_dir = tempfile.gettempdir() + '/pgbouncer_' + str(port)
                 try:
                     os.remove(conf_dir_orig)
+                except FileNotFoundError:
+                    pass
+                try:
                     os.symlink(conf_dir, conf_dir_orig)
                 except Exception:
                     pass

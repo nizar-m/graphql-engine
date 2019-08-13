@@ -53,7 +53,7 @@ class PGBouncer:
         with open(self.ini_file,'w') as f:
             f.write('''
 [databases]
-{pgb_database} = host={host} port={port} user={user} password={password} dbname={database}
+            {pgb_database} = host={host} port={port} user={user} {password_conf} dbname={database}
 
 [pgbouncer]
 listen_port = {listen_port}
@@ -66,7 +66,7 @@ admin_users = {pgb_user}
             '''.format(
                 host = self.db_hostname,
                 user = self.db_username,
-                password = self.db_password,
+                password_conf = 'password=' + self.db_password if self.db_password else '',
                 port = self.db_port,
                 database = self.db_database,
                 log_file = self.log_file,
