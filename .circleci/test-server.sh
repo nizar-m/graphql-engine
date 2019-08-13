@@ -25,7 +25,7 @@ with sqlite3.connect("'$HASURA_TEST_INFO_DB'") as conn:
   
 combine_all_hpc_reports() {
 	combined_file="${HASURA_TEST_OUTPUT_FOLDER}/graphql-engine.tix"
-	combined_file_intermediate="${HASURA_TEST_OUTPUT_FOLDER}/hpc/graphql-engine-combined-intermediate.tix"
+	combined_file_intermediate="${HASURA_TEST_OUTPUT_FOLDER}/graphql-engine-combined-intermediate.tix"
 	rm -f "$combined_file"
 	for tix_file in $(get_hpc_files)
 	do
