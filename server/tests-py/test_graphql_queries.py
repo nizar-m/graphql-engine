@@ -61,9 +61,13 @@ class TestGraphQLQueryBasic:
     def test_select_query_user_col_change(self, hge_ctx, transport):
         hge_ctx.check_query_f(self.dir + "/select_query_user_col_change.yaml")
 
+    @transport('http')
     def test_nested_select_with_foreign_key_alter(self, hge_ctx, transport):
-        transport = 'http'
         hge_ctx.check_query_f(self.dir + "/nested_select_with_foreign_key_alter.yaml", transport)
+
+    @transport('http')
+    def test_select_query_invalid_escape_sequence(self, hge_ctx, transport):
+        hge_ctx.check_query_f(self.dir + "/select_query_invalid_escape_sequence.yaml", transport)
 
 
 class TestGraphQLQueryAgg:

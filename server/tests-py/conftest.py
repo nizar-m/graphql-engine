@@ -153,6 +153,8 @@ def pytest_configure(config):
         config.hge_urls = config.getoption('--hge-urls').copy()
         config.pg_urls = config.getoption('--pg-urls').copy()
 
+        #This directory would store the error messages thrown by xdist threads
+        #Hack for https://github.com/pytest-dev/pytest-xdist/issues/86
         config.tmpdir = tempfile.mkdtemp()
 
         xdist_threads = config.getoption('-n', default=None) or 1
@@ -243,6 +245,8 @@ def hge_ctx(request):
         )
     except HGECtxError as e:
         if not is_master(config):
+            # Exit messages are not shown properly if xdist plugin is present (https://github.com/pytest-dev/pytest-xdist/issues/86)
+            # Hack around this by saving the errors into a file, and print them out during pytest_unconfigure
             log_file = config.slaveinput['tmpdir'] + "/" + config.slaveinput['workerid'] + "_err.log"
             with open(log_file, 'w') as f:
                 f.write(Style.BRIGHT + '[' + config.slaveinput['workerid'] + '] ' + Fore.RED + 'HGECtxError: ' + str(e) + Style.RESET_ALL + '\n')
