@@ -68,6 +68,7 @@ class TestRemoteSchemaBasic:
 
     @pytest.fixture(autouse=True)
     def remotes_context(self, hge_ctx, remote_gql_url):
+        """Set the remotes required before running tests"""
         name = 'simple 1'
         st_code, resp = add_remote(hge_ctx, name, remote_gql_url('/hello-graphql'))
         assert st_code == 200, resp
@@ -247,6 +248,7 @@ class TestAddRemoteSchemaTbls:
 
     @pytest.fixture(scope='function')
     def schema_for_same_scalars_test(self, hge_ctx):
+        """Set the schema required for the test involving same scalars"""
         st_code, resp = hge_ctx.admin_v1q_f(self.dir + '/person_table.yaml')
         assert st_code == 200, resp
         yield
@@ -314,6 +316,7 @@ class TestRemoteSchemaQueriesOverWebsocket:
 
     @pytest.fixture(autouse=True)
     def setup_ws_client(self, ws_client):
+        """Send connection init message before running tests"""
         print("CONNECTED", ws_client.connected())
         ws_client.init_as_admin()
         yield
@@ -386,6 +389,7 @@ class TestRemoteSchemaResponseHeaders():
 
     @pytest.fixture(autouse=True)
     def remotes_ctx(self, hge_ctx, remote_gql_url):
+        """Set remotes needed for tests in this class"""
         name = 'sample-auth'
         st_code, resp = add_remote(hge_ctx, name, remote_gql_url('/auth-graphql'))
         assert st_code == 200, resp
@@ -411,10 +415,12 @@ class TestAddRemoteSchemaCompareRootQueryFields:
 
     @pytest.fixture(autouse=True)
     def remote(self, remote_gql_url):
+        """Provides the URL of remote GraphQL server used for tests in this class"""
         return remote_gql_url('/default-value-echo-graphql')
 
     @pytest.fixture(autouse=True)
-    def transact(self, hge_ctx, remote):
+    def set_remotes(self, hge_ctx, remote):
+        """Set remotes needed for tests"""
         name = 'default_value_test'
         st_code, resp = add_remote(hge_ctx, name, remote)
         assert st_code == 200, resp

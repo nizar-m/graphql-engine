@@ -16,9 +16,10 @@ def check_post_404(hge_ctx,url):
    })
 
 @pytest.fixture(scope='class')
-def skip_based_on_flags(request):
+def skip_tests_based_on_flags(request):
    '''
-   Skip tests if the required condition is not set
+   If Metadata APIs are enabled/disabled, skip the metadata disabled/enabled tests
+   Similarly for GraphQL APIs
    '''
    cls = request.cls
    class_name = cls.__name__
@@ -30,7 +31,7 @@ def skip_based_on_flags(request):
    if flag and not request.config.getoption(flag):
       pytest.skip('{}: Flag {} is NOT set. Skipping'.format(class_name, flag))
 
-pytestmark = pytest.mark.usefixtures('skip_based_on_flags')
+pytestmark = pytest.mark.usefixtures('skip_tests_based_on_flags')
 
 class TestMetadataDisabled:
 

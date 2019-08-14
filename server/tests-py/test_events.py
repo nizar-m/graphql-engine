@@ -185,7 +185,8 @@ class TestUpdateEvtQuery(object):
     dir = 'queries/event_triggers/update_query'
 
     @pytest.fixture(autouse=True)
-    def transact(self, request, hge_ctx, evts_webhook_url):
+    def event_triggers(self, request, hge_ctx, evts_webhook_url):
+        """Sets up the event triggers needed for tests"""
         print("In setup method")
         st_code, resp = hge_ctx.admin_v1q_f(self.dir + '/create-setup.yaml')
         assert st_code == 200, resp
@@ -481,16 +482,10 @@ class TestWebhookEnv(object):
         assert st_code == 200, resp
         check_event(hge_ctx, evts_webhook, "t1_all", table, "DELETE", exp_ev_data)
 
+@evts_db_state_context
 class TestSessionVariables(object):
 
-    @pytest.fixture(autouse=True)
-    def transact(self, request, hge_ctx, evts_webhook):
-        print("In setup method")
-        st_code, resp = hge_ctx.admin_v1q_f('queries/event_triggers/basic/setup.yaml')
-        assert st_code == 200, resp
-        yield
-        st_code, resp = hge_ctx.admin_v1q_f('queries/event_triggers/basic/teardown.yaml')
-        assert st_code == 200, resp
+    dir = 'queries/event_triggers/basic'
 
     def test_basic(self, hge_ctx, evts_webhook):
         table = {"schema": "hge_tests", "name": "test_t1"}

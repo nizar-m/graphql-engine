@@ -42,7 +42,8 @@ class TestHorizantalScaleBasic():
 
 
     @pytest.fixture(autouse=True, scope='class')
-    def transact(self, hge_ctx):
+    def cleanup(self, hge_ctx):
+        "Teardown the schema created by the tests"
         self.servers['first_replica'] = hge_ctx.hge_url
         self.servers['second_replica'] = hge_ctx.hge_replica_url
         yield

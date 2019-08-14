@@ -144,7 +144,12 @@ def ensure_enough_parallel_configs(l, name, threads):
     if threads > len(l):
         exit('Not enough unique ' + name + ' specified, Required ' + str(threads) + ', got ' + str(len(l)))
 
+def doc_option_set(config):
+    return any([config.getoption(x) for x in ('--fixtures', '--help', '--markers')])
+
 def pytest_configure(config):
+    if doc_option_set(config):
+        return
     if is_master(config):
         for o in ['--hge-urls', '--pg-urls']:
             if not config.getoption(o):
@@ -193,6 +198,8 @@ def pytest_configure(config):
 
 @pytest.hookimpl(optionalhook=True)
 def pytest_configure_node(node):
+    if doc_option_set(node.config):
+        return
     for attr in [ 'hge_url', 'pg_url', 'evts_webhook_port', 'remote_gql_port' ]:
         node.slaveinput[attr] = getattr(node.config, attr + 's').pop()
 
@@ -204,7 +211,7 @@ def pytest_configure_node(node):
 
 
 def pytest_unconfigure(config):
-    if is_master(config):
+    if is_master(config) and hasattr(config, 'tmpdir'):
         try:
             for filename in os.listdir(config.tmpdir):
                 with open(config.tmpdir + "/" + filename) as f:
@@ -213,9 +220,9 @@ def pytest_unconfigure(config):
             shutil.rmtree(config.tmpdir)
 
 
-#We cannot override a class level parameterization with a function level one in pytest (while using pytest.mark.parametrize).
-#So we are using the 'transport' marker to implement overrides.
-#With the following function, the closest 'transport' marker is used to parameterize tests.
+# With pytest.mark.parameterize, we cannot override a class level parameterization with a function level one
+# So we are using the 'transport' marker to implement overrides.
+# In this hook the closest 'transport' marker is used to parameterize tests (when the marker is present).
 def pytest_generate_tests(metafunc):
     transport = metafunc.definition.get_closest_marker('transport')
     if transport:
@@ -339,9 +346,13 @@ evts_db_state_context = pytest.mark.usefixtures('per_method_db_state', 'evts_web
 
 @pytest.fixture(scope='class')
 def per_class_db_state(request, hge_ctx):
-    """"
-    This fixture sets up the database state for select queries.
-    A class level scope would work, as select queries does not change database state
+    """
+    Set up the database state for select queries.
+    Has a class level scope, as select queries does not change database state
+    Expects either `dir` class variable which provides the directory
+    with `setup.yaml` and `teardown.yaml` files
+    Or class variables `setup_files` and `teardown_files` that provides
+    the list of setup and teardown files respectively
     """
     setup = getattr(request.cls, 'setup_files', request.cls.dir + '/setup.yaml')
     teardown = getattr(request.cls, 'teardown_files', request.cls.dir + '/teardown.yaml')
@@ -349,9 +360,12 @@ def per_class_db_state(request, hge_ctx):
 
 @pytest.fixture(scope='class')
 def db_schema_for_mutations(request, hge_ctx):
-    """"
+    """
     This fixture sets up the database schema for mutations
-    This can have a class level scope, since mutations does not change schema
+    Has a class level scope, since mutations does not change schema
+    Expects either `dir` class variable which provides the directory with `schema_setup.yaml` and `schema_teardown.yaml` files
+    Or variables `setup_setup_files` and `schema_teardown_files` that provides
+    the list of setup and teardown files respectively
     """
     setup = getattr(request.cls, 'schema_setup_files', request.cls.dir + '/schema_setup.yaml')
     teardown = getattr(request.cls, 'schema_teardown_files', request.cls.dir + '/schema_teardown.yaml')
@@ -359,9 +373,13 @@ def db_schema_for_mutations(request, hge_ctx):
 
 @pytest.fixture(scope='function')
 def db_data_for_mutations(request, hge_ctx, db_schema_for_mutations):
-    """"
+    """
     This fixture sets up the data for mutations
-    Requires a function level scope, since mutations may change data
+    Has a function level scope, since mutations may change data
+    Having just the setup file(s), or the teardown file(s) is allowed
+    Expects either `dir` class variable which provides the directory with `schema_setup.yaml` and / or `schema_teardown.yaml` files
+    The class may provide `data_setup_files` variables which contains the list of data setup files
+    Or the `data_teardown_files` variable which provides the list of data teardown files
     """
     setup = getattr(request.cls, 'data_setup_files', request.cls.dir + '/data_setup.yaml')
     teardown = getattr(request.cls, 'data_teardown_files', request.cls.dir + '/data_teardown.yaml')
@@ -369,9 +387,10 @@ def db_data_for_mutations(request, hge_ctx, db_schema_for_mutations):
 
 @pytest.fixture(scope='function')
 def per_method_db_state(request, db_state_info, hge_ctx):
-    """"
+    """
     This fixture sets up the database state for metadata operations
-    Requires a function level scope, since metadata operations may change both the schema and data
+    Has a function level scope, since metadata operations may change both the schema and data
+    Class variable requirements are similar to that of per_class_db_state fixture
     """
     setup_if_reqd(request, db_state_info, hge_ctx)
     yield

@@ -74,6 +74,7 @@ class TestSubscriptionBasic(object):
 
     @pytest.fixture(autouse=True)
     def ws_conn_init(self, hge_ctx, ws_client):
+        """Send the connection init message before running tests"""
         init_ws_conn(hge_ctx, ws_client)
 
     '''
@@ -181,6 +182,7 @@ class TestSubscriptionLiveQueries(object):
 
     @pytest.fixture(autouse=True)
     def init_conn(self, hge_ctx, ws_client):
+        """Send the connection init message before running tests"""
         init_ws_conn(hge_ctx, ws_client)
         yield
 

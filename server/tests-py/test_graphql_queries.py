@@ -6,6 +6,10 @@ skip_reason = skip_module(__file__)
 if skip_reason:
     pytest.skip(skip_reason, allow_module_level=True)
 
+# pytest.mark.parametrize lacks support for overriding a module level parameterization with a class level (or a method level one)
+# With a transport marker however, we can get the closest marker (method > class > module).
+# The closest marker can then be used to parametrize tests
+# For implementation details, see `pytest_generate_tests` hook in conftest.py
 def transport(*args):
     return pytest.mark.transport(*args)
 
@@ -394,4 +398,3 @@ class TestGraphQLQueryFunctions:
 
     def test_query_my_add(self, hge_ctx, transport):
         hge_ctx.check_query_f(self.dir + '/query_my_add.yaml', transport)
-

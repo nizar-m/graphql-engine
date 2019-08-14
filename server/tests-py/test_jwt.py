@@ -236,7 +236,8 @@ class TestJWTBasic():
     dir = 'queries/graphql_query/permissions'
 
     @pytest.fixture(autouse=True)
-    def transact(self):
+    def load_test_conf(self):
+        """Load the basic test configurations used for JWT tests in this class"""
         with open(self.dir + '/user_select_query_unpublished_articles.yaml') as c:
             self.conf = yaml.safe_load(c)
         curr_time = datetime.now()
@@ -346,7 +347,8 @@ class TestJwtAudienceCheck():
     dir = 'queries/graphql_query/permissions'
 
     @pytest.fixture(autouse=True)
-    def transact(self):
+    def load_test_conf(self):
+        """Load the basic test configuration used for JWT tests in this class"""
         with open(self.dir + '/user_select_query_unpublished_articles.yaml') as c:
             self.conf = yaml.safe_load(c)
         curr_time = datetime.now()
@@ -365,7 +367,11 @@ class TestJwtIssuerCheck():
 
     #Parametrizing with endpoints.
     @pytest.fixture(autouse=True, params=['/v1/graphql', '/v1alpha1/graphql'])
-    def conf_for_tests(self, request):
+    def load_test_conf(self, request):
+        """
+        Load the basic test configuration used for JWT tests in this class
+        This is an example of how parameterization of tests can be done using parameterized fixtures
+        """
         with open(self.dir + '/user_select_query_unpublished_articles.yaml') as c:
             self.conf = yaml.safe_load(c)
         self.conf['url'] = request.param

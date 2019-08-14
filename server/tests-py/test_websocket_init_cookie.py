@@ -6,6 +6,7 @@ import websocket
 import pytest
 from validate import check_query
 from skip_test_modules import skip_module
+from conftest import per_class_db_context
 
 skip_reason = skip_module(__file__)
 if skip_reason:
@@ -15,6 +16,7 @@ def url(hge_ctx):
     ws_url = urlparse(hge_ctx.hge_url)._replace(scheme='ws', path='/v1alpha1/graphql')
     return ws_url.geturl()
 
+@per_class_db_context
 class TestWebsocketInitCookie():
     """
     test if cookie is sent when initing the websocket connection, is our auth
@@ -22,13 +24,9 @@ class TestWebsocketInitCookie():
     """
     dir = 'queries/remote_schemas'
 
-    @pytest.fixture(autouse=True)
-    def transact(self, hge_ctx):
-        st_code, resp = hge_ctx.admin_v1q_f(self.dir + '/person_table.yaml')
-        assert st_code == 200, resp
-        yield
-        assert st_code == 200, resp
-        st_code, resp = hge_ctx.admin_v1q_f(self.dir + '/drop_person_table.yaml')
+    setup_files = dir + '/person_table.yaml'
+
+    teardown_files = dir + '/drop_person_table.yaml'
 
     def _send_query(self, hge_ctx):
         ws_url = url(hge_ctx)

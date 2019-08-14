@@ -19,7 +19,8 @@ class TestLogging():
         assert st_code == 200, resp
 
     @pytest.fixture(autouse=True)
-    def transact(self, hge_ctx):
+    def load_query_logs(self, hge_ctx):
+        """Run some queries on the GraphQL server and collect the logs"""
         # setup some tables
         st_code, resp = hge_ctx.admin_v1q_f(self.dir + '/setup.yaml')
         assert st_code == 200, resp
