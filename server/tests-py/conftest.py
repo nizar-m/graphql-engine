@@ -219,6 +219,18 @@ def pytest_unconfigure(config):
         finally:
             shutil.rmtree(config.tmpdir)
 
+# Tests in test_version.py and test_config_api.py fail
+# if the code has not been compiled after a commit.
+# These are useful errors. So moving these tests up in the
+# list for early errors (or for an early exit with --maxfail=1)
+def pytest_collection_modifyitems(session, config, items):
+    def sort_key(item):
+        first_modules = ['test_version', 'test_config_api']
+        if item.module.__name__ in first_modules:
+            return 0
+        else:
+            return 1
+    return items.sort(key=sort_key)
 
 # With pytest.mark.parameterize, we cannot override a class level parameterization with a function level one
 # So we are using the 'transport' marker to implement overrides.
@@ -251,13 +263,7 @@ def hge_ctx(request):
             hge_version = config.getoption('--hge-version')
         )
     except HGECtxError as e:
-        if not is_master(config):
-            # Exit messages are not shown properly if xdist plugin is present (https://github.com/pytest-dev/pytest-xdist/issues/86)
-            # Hack around this by saving the errors into a file, and print them out during pytest_unconfigure
-            log_file = config.slaveinput['tmpdir'] + "/" + config.slaveinput['workerid'] + "_err.log"
-            with open(log_file, 'w') as f:
-                f.write(Style.BRIGHT + '[' + config.slaveinput['workerid'] + '] ' + Fore.RED + 'HGECtxError: ' + str(e) + Style.RESET_ALL + '\n')
-        pytest.exit(str(e))
+        exit_xdist(str(e), config)
 
     yield hge_ctx  # provide the fixture value
     print("teardown hge_ctx")
@@ -266,9 +272,7 @@ def hge_ctx(request):
 
 @pytest.fixture(scope='module')
 def remote_gql_server(request, hge_ctx):
-    """
-    This fixture runs the remote GraphQL server needed for tests with Remote GraphQL servers
-    """
+    """Sets up the remote GraphQL server needed for tests with remote servers"""
     port = get_config(request.config, 'remote-gql-port')
 
     remote_gql_httpd = webserver.WebServer(
@@ -284,9 +288,7 @@ def remote_gql_server(request, hge_ctx):
 
 @pytest.fixture(scope='class')
 def evts_webhook(request, hge_ctx):
-    """
-    This fixture returns the events webhook server
-    """
+    """Sets up the events webhook server"""
     port = get_config(request.config, 'evts-webhook-port')
     webhook_httpd = EvtsWebhookServer(server_address=('127.0.0.1',port))
     webserver = start_webserver(webhook_httpd)
@@ -478,6 +480,16 @@ def unique_list(x):
 
 def exit(e):
     pytest.exit(Fore.RED + Style.BRIGHT + e + Style.RESET_ALL)
+
+def exit_xdist(e, config):
+    errMsg = Fore.RED + Style.BRIGHT + e + Style.RESET_ALL
+    if not is_master(config):
+        # Exit messages are not shown properly if xdist plugin is present (https://github.com/pytest-dev/pytest-xdist/issues/86)
+        # Hack around this by saving the errors into a file, and print them out during pytest_unconfigure
+        log_file = config.slaveinput['tmpdir'] + "/" + config.slaveinput['workerid'] + "_err.log"
+        with open(log_file, 'w') as f:
+            f.write(Style.BRIGHT + '[' + config.slaveinput['workerid'] + '] ' + errMsg + '\n')
+    pytest.exit(errMsg)
 
 def wait_for_port_open(port, max_wait=10):
     start_time = time.time()

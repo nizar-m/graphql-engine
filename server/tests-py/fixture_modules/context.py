@@ -82,11 +82,6 @@ class HGECtx:
               raise HGECtxError(repr(e))
           assert st_code == 200, resp
 
-        try:
-            test_version.TestServerVersion().test_version(self)
-        except AssertionError as e:
-            raise HGECtxError("version mismach: " + repr(e))
-
     def reflect_tables(self):
         self.meta.reflect(bind=self.engine)
 
