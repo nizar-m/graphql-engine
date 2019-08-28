@@ -101,11 +101,11 @@ class TestCases:
 
     def set_pg_options(self):
         self.arg_parser.add_argument('--pg-urls', metavar='HASURA_TEST_PG_URLS', help='Postgres database urls to be used for tests', required=False)
-        self.arg_parser.add_argument('--pg-docker-image', metavar='HASURA_TEST_PG_DOCKER_IMAGE', help='Docker image to be used for tests', required=False)
+        self.arg_parser.add_argument('--pg-docker-image', metavar='HASURA_TEST_PG_DOCKER_IMAGE', help='Postgres docker image to be used for tests', required=False)
 
 
     def set_hge_options(self):
-        self.arg_parser.add_argument('--hge-docker-image', metavar='HASURA_TEST_HGE_DOCKER_IMAGE', help='Docker image to be used for tests', required=False)
+        self.arg_parser.add_argument('--hge-docker-image', metavar='HASURA_TEST_HGE_DOCKER_IMAGE', help='GraphQl engine docker image to be used for tests', required=False)
         self.arg_parser.add_argument('--hge-executable', metavar='HASURA_TEST_GRAPHQL_ENGINE', help='GraphQL engine executable to be used for tests', required=False)
         self.arg_parser.add_argument('--hge-rts-opts', metavar='HASURA_TEST_HGE_RTS_OPTS', help='rts opts for GraphQL engine', required=False)
 
@@ -123,7 +123,7 @@ class TestCases:
 
     def set_arg_parse_options(self):
         self.arg_parser = argparse.ArgumentParser()
-        self.arg_parser.add_argument('-f', metavar='FILE', help='Test configuration file', required=False)
+        self.arg_parser.add_argument('-f', metavar='FILE', help='Test configuration file. (The other options given below should not be used along with this argument. Those options may conflict with the configuration file).', required=False)
         self.set_pg_options()
         self.set_hge_options()
         self.set_auth_options()

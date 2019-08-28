@@ -108,6 +108,8 @@ class GraphQLServers:
         self.set_auth_webhook_ssl_crts(ca_key, ca_cert)
 
     # Create new custom SSL certs directory and use it for verifying certs
+    # This will help in ensuring that the certificates of auth webhook are verified
+    # without touching the default certificate authorities used by the operating system
     def create_custom_ssl_certs_dir(self):
         self.custom_ssl_certs_dir = self.ssl_root_dir() + "/certs"
         os.makedirs(self.custom_ssl_certs_dir, exist_ok=True)
@@ -506,6 +508,8 @@ class GraphQLServers:
         self.remote_gql_ports = []
 
     def remove_webhook_ssl_conf(self):
+        # Delete the custom SSL certs folder if the test were successful
+        # Otherwise keep it for debugging
         if auth_type(self.scenario) == 'webhook' and os.environ.get('HASURA_TEST_SUCCESS') == 'true':
             shutil.rmtree(self.ssl_root_dir(), ignore_errors=True)
         else:
