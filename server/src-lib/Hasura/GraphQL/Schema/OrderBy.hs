@@ -7,6 +7,7 @@ module Hasura.GraphQL.Schema.OrderBy
   ) where
 
 import qualified Data.HashMap.Strict           as Map
+import           Control.Lens                  (preview)
 import qualified Language.GraphQL.Draft.Syntax as G
 
 import           Hasura.GraphQL.Resolve.Types
@@ -139,8 +140,8 @@ mkOrdByInpObj tn selFlds = (inpObjTy, ordByCtx)
     desc = G.Description $
       "ordering options when selecting data from " <>> tn
 
-    pgCols = lefts selFlds
-    relFltr ty = flip filter (rights selFlds) $ \(ri, _, _, _, _) ->
+    pgCols = mapMaybe (preview _SelFldCol) selFlds
+    relFltr ty = flip filter (mapMaybe (preview _SelFldRel) selFlds) $ \(ri, _, _, _, _) -> 
       riType ri == ty
     objRels = relFltr ObjRel
     arrRels = relFltr ArrRel

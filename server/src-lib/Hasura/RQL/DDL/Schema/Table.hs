@@ -122,6 +122,10 @@ purgeDep schemaObjId = case schemaObjId of
     liftTx $ delRelFromCatalog qt rn
     delRelFromCache rn qt
 
+  (SOTableObj qt (TORemoteRel rn))     -> do
+    liftTx $ delRemoteRelFromCatalog qt rn
+    delRemoteRelFromCache qt rn
+
   (SOFunction qf) -> do
     liftTx $ delFunctionFromCatalog qf
     delFunctionFromCache qf
@@ -218,6 +222,10 @@ delTableAndDirectDeps qtn@(QualifiedObject sn tn) = do
     Q.unitQ [Q.sql|
              DELETE FROM "hdb_catalog"."event_triggers"
              WHERE schema_name = $1 AND table_name = $2
+              |] (sn, tn) False
+    Q.unitQ [Q.sql|
+             DELETE FROM "hdb_catalog"."hdb_remote_relationship"
+             WHERE table_schema = $1 AND table_name = $2
               |] (sn, tn) False
     delTableFromCatalog qtn
   delTableFromCache qtn
@@ -349,6 +357,7 @@ buildSchemaCacheG withSetup = do
   -- fetch all catalog metadata
   CatalogMetadata tables relationships permissions
     eventTriggers remoteSchemas functions fkeys' allowlistDefs
+    remoteRelationships
     <- liftTx fetchCatalogData
 
   let fkeys = HS.fromList fkeys'
@@ -400,7 +409,7 @@ buildSchemaCacheG withSetup = do
 
   -- event triggers
   forM_ eventTriggers $ \(CatalogEventTrigger qt trn configuration) -> do
-    let objId = MOTableObj qt $ MTOTrigger trn
+    let objId = MOTableObj qt $ MTOEventTrigger trn
         def = object ["table" .= qt, "configuration" .= configuration]
         mkInconsObj = InconsistentMetadataObj objId MOTEventTrigger def
     handleInconsistentObj mkInconsObj $ do
@@ -430,6 +439,8 @@ buildSchemaCacheG withSetup = do
   -- remote schemas
   forM_ remoteSchemas resolveSingleRemoteSchema
 
+  forM_ remoteRelationships setupRemoteRelFromCatalog
+
   where
     permHelper setup sqlGenCtx qt rn pDef pa = do
       qCtx <- mkAdminQCtx sqlGenCtx <$> askSchemaCache
@@ -456,6 +467,21 @@ buildSchemaCacheG withSetup = do
         writeSchemaCache sc { scGCtxMap = mergedGCtxMap
                             , scDefaultRemoteGCtx = mergedDefGCtx
                             }
+
+    setupRemoteRelFromCatalog remoteRelationship = do
+      let objId = MOTableObj qt $ MTORemoteRelationship relName
+          def = object ["table" .= qt, "configuration" .= remoteRelationship]
+          mkInconsObj = InconsistentMetadataObj
+                        objId
+                        MOTRemoteRelationship
+                        def
+      handleInconsistentObj mkInconsObj $ do
+        (remoteField, additionalTypesMap) <-
+          runCreateRemoteRelationshipP1 remoteRelationship
+        runCreateRemoteRelationshipP2Setup remoteField additionalTypesMap
+      where
+        qt = rtrTable remoteRelationship
+        relName = rtrName remoteRelationship
 
 fetchCatalogData :: Q.TxE QErr CatalogMetadata
 fetchCatalogData =

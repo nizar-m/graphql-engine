@@ -60,6 +60,8 @@ import           Hasura.Server.Utils
 import           Hasura.Server.Version
 import           Hasura.SQL.Types
 
+import qualified Language.GraphQL.Draft.Syntax          as G
+
 consoleTmplt :: M.Template
 consoleTmplt = $(M.embedSingleTemplate "src-rsr/console.html")
 
@@ -359,6 +361,46 @@ v1Alpha1PGDumpHandler b = do
   output <- PGD.execPGDump b ci
   return $ RawResp $ HttpResponse output (Just [Header sqlHeader])
 
+remoteSchemaProxyHandler :: Text -> GH.GQLReqUnparsed ->  Handler (HttpResponse EncJSON)
+remoteSchemaProxyHandler remoteSchemaNameTxt query = do
+  userInfo <- asks hcUser
+  reqHeaders <- asks hcReqHeaders
+  manager <- scManager . hcServerCtx <$> ask
+  scRef <- scCacheRef . hcServerCtx <$> ask
+  (sc, scVer) <- liftIO $ readIORef $ _scrCache scRef
+  pgExecCtx <- scPGExecCtx . hcServerCtx <$> ask
+  sqlGenCtx <- scSQLGenCtx . hcServerCtx <$> ask
+  planCache <- scPlanCache . hcServerCtx <$> ask
+  enableAL <- scEnableAllowlist . hcServerCtx <$> ask
+  logger <- scLogger . hcServerCtx <$> ask
+  requestId <- asks hcRequestId
+  let remoteSchemaInfoM =
+        join $
+        fmap
+          (\rsName -> M.lookup rsName (scRemoteSchemas sc))
+          (RemoteSchemaName <$> mkNonEmptyText remoteSchemaNameTxt)
+  case remoteSchemaInfoM of
+    Nothing -> throw400 NotFound "remote schema not found"
+    Just rsCtx -> do
+      let execCtx =
+            E.ExecutionCtx
+              logger
+              sqlGenCtx
+              pgExecCtx
+              planCache
+              sc
+              scVer
+              manager
+              enableAL
+      flip runReaderT execCtx $
+        E.execRemoteGQ
+          requestId
+          userInfo
+          reqHeaders
+          G.OperationTypeQuery
+          (rscInfo rsCtx)
+          (Left query)
+
 consoleAssetsHandler :: L.Logger -> Text -> FilePath -> ActionT IO ()
 consoleAssetsHandler logger dir path = do
   -- '..' in paths need not be handed as it is resolved in the url by
@@ -552,6 +594,11 @@ httpApp corsCfg serverCtx enableConsole consoleAssetsDir enableTelemetry = do
 
       post "v1/graphql" $ mkSpockAction GH.encodeGQErr allMod200 serverCtx $
         mkPostHandler $ mkAPIRespHandler v1GQHandler
+
+      post ("v1/graphql/proxy" <//> var) $ \remoteSchemaName ->  mkSpockAction GH.encodeGQErr id serverCtx $
+        mkPostHandler $ mkAPIRespHandler (\query -> do
+          onlyAdmin
+          remoteSchemaProxyHandler remoteSchemaName query)
 
     when (isDeveloperAPIEnabled serverCtx) $ do
       get "dev/ekg" $ mkSpockAction encodeQErr id serverCtx $

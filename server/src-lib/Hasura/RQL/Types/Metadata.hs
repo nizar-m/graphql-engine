@@ -3,11 +3,12 @@ module Hasura.RQL.Types.Metadata where
 import           Data.Aeson
 import           Hasura.Prelude
 
-import qualified Data.Text                     as T
+import qualified Data.Text                           as T
 
 import           Hasura.RQL.Types.Common
 import           Hasura.RQL.Types.EventTrigger
 import           Hasura.RQL.Types.Permission
+import           Hasura.RQL.Types.RemoteRelationship
 import           Hasura.RQL.Types.RemoteSchema
 import           Hasura.SQL.Types
 
@@ -18,15 +19,17 @@ data MetadataObjType
   | MOTEventTrigger
   | MOTFunction
   | MOTRemoteSchema
+  | MOTRemoteRelationship
   deriving (Eq)
 
 instance Show MetadataObjType where
-  show MOTTable        = "table"
-  show (MOTRel ty)     = T.unpack (relTypeToTxt ty) <> "_relation"
-  show (MOTPerm ty)    = show ty <> "_permission"
-  show MOTEventTrigger = "event_trigger"
-  show MOTFunction     = "function"
-  show MOTRemoteSchema = "remote_schema"
+  show MOTTable              = "table"
+  show (MOTRel ty)           = T.unpack (relTypeToTxt ty) <> "_relation"
+  show (MOTPerm ty)          = show ty <> "_permission"
+  show MOTEventTrigger       = "event_trigger"
+  show MOTFunction           = "function"
+  show MOTRemoteSchema       = "remote_schema"
+  show MOTRemoteRelationship = "remote_relationship"
 
 instance ToJSON MetadataObjType where
   toJSON = String . T.pack . show
@@ -34,7 +37,8 @@ instance ToJSON MetadataObjType where
 data TableMetadataObjId
   = MTORel !RelName !RelType
   | MTOPerm !RoleName !PermType
-  | MTOTrigger !TriggerName
+  | MTOEventTrigger !TriggerName
+  | MTORemoteRelationship !RemoteRelationshipName
   deriving (Show, Eq, Generic)
 
 instance Hashable TableMetadataObjId

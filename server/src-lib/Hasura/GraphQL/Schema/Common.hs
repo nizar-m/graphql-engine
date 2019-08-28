@@ -1,20 +1,7 @@
-module Hasura.GraphQL.Schema.Common
-  ( qualObjectToName
-  , fromInpValL
-
-  , mkColName
-  , mkRelName
-  , mkAggRelName
-
-  , SelField
-
-  , mkTableTy
-  , mkTableAggTy
-
-  , mkColumnEnumVal
-  ) where
+module Hasura.GraphQL.Schema.Common where
 
 import qualified Data.HashMap.Strict           as Map
+import           Control.Lens.TH
 import qualified Language.GraphQL.Draft.Syntax as G
 
 import           Hasura.GraphQL.Validate.Types
@@ -22,8 +9,15 @@ import           Hasura.Prelude
 import           Hasura.RQL.Types
 import           Hasura.SQL.Types
 
-type SelField =
-  Either PGColInfo (RelInfo, Bool, AnnBoolExpPartialSQL, Maybe Int, Bool)
+data SelField
+  = SelFldCol PGColInfo
+  | SelFldRel SelFldRelTup
+  | SelFldRemote RemoteField
+
+-- TODO: This tuple is bad and should be a record.
+type SelFldRelTup = (RelInfo, Bool, AnnBoolExpPartialSQL, Maybe Int, Bool)
+
+$(makePrisms ''SelField)
 
 qualObjectToName :: (ToTxt a) => QualifiedObject a -> G.Name
 qualObjectToName = G.Name . snakeCaseQualObject

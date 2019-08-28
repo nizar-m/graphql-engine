@@ -19,7 +19,6 @@ import qualified Data.IORef                                  as IORef
 import qualified Data.Text                                   as T
 import qualified Data.Text.Encoding                          as TE
 import qualified Data.Time.Clock                             as TC
-import qualified Language.GraphQL.Draft.Syntax               as G
 import qualified ListT
 import qualified Network.HTTP.Client                         as H
 import qualified Network.HTTP.Types                          as H
@@ -32,6 +31,10 @@ import           Hasura.EncJSON
 import           Hasura.GraphQL.Logging
 import           Hasura.GraphQL.Transport.HTTP.Protocol
 import           Hasura.GraphQL.Transport.WebSocket.Protocol
+import qualified Hasura.GraphQL.Transport.WebSocket.Server   as WS
+import           Hasura.GraphQL.Validate
+import qualified Hasura.GraphQL.Validate                     as VQ
+import qualified Hasura.Logging                              as L
 import           Hasura.Prelude
 import           Hasura.RQL.Types
 import           Hasura.RQL.Types.Error                      (Code (StartFailed))
@@ -44,8 +47,7 @@ import           Hasura.Server.Utils                         (RequestId,
 
 import qualified Hasura.GraphQL.Execute                      as E
 import qualified Hasura.GraphQL.Execute.LiveQuery            as LQ
-import qualified Hasura.GraphQL.Transport.WebSocket.Server   as WS
-import qualified Hasura.Logging                              as L
+import qualified Language.GraphQL.Draft.Syntax               as G
 
 
 type OperationMap
@@ -254,54 +256,64 @@ onConn (L.Logger logger) corsPolicy wsId requestHead = do
             <> "CORS on websocket connections, then you can use the flag --ws-read-cookie or "
             <> "HASURA_GRAPHQL_WS_READ_COOKIE to force read cookie when CORS is disabled."
 
-
 onStart :: WSServerEnv -> WSConn -> StartMsg -> IO ()
-onStart serverEnv wsConn (StartMsg opId q) = catchAndIgnore $ do
+onStart serverEnv wsConn (StartMsg opId q) =
+  catchAndIgnore $ do
+    opM <- liftIO $ STM.atomically $ STMMap.lookup opId opMap
+    when (isJust opM) $
+      withComplete $
+      sendStartErr $
+      "an operation already exists with this id: " <> unOperationId opId
+    userInfoM <- liftIO $ STM.readTVarIO userInfoR
+    (userInfo, reqHdrs) <- case userInfoM of
+      CSInitialised userInfo _ reqHdrs -> return (userInfo, reqHdrs)
+      CSInitError initErr -> do
+        let e = "cannot start as connection_init failed with : " <> initErr
+        withComplete $ sendStartErr e
+      CSNotInitialised _ -> do
+        let e = "start received before the connection is initialised"
+        withComplete $ sendStartErr e
 
-  opM <- liftIO $ STM.atomically $ STMMap.lookup opId opMap
-
-  when (isJust opM) $ withComplete $ sendStartErr $
-    "an operation already exists with this id: " <> unOperationId opId
-
-  userInfoM <- liftIO $ STM.readTVarIO userInfoR
-  (userInfo, reqHdrs) <- case userInfoM of
-    CSInitialised userInfo _ reqHdrs -> return (userInfo, reqHdrs)
-    CSInitError initErr -> do
-      let e = "cannot start as connection_init failed with : " <> initErr
-      withComplete $ sendStartErr e
-    CSNotInitialised _ -> do
-      let e = "start received before the connection is initialised"
-      withComplete $ sendStartErr e
-
-  requestId <- getRequestId reqHdrs
-  (sc, scVer) <- liftIO $ IORef.readIORef gCtxMapRef
-  execPlanE <- runExceptT $ E.getResolvedExecPlan pgExecCtx
-               planCache userInfo sqlGenCtx enableAL sc scVer q
-  execPlan <- either (withComplete . preExecErr requestId) return execPlanE
-  let execCtx = E.ExecutionCtx logger sqlGenCtx pgExecCtx
+    requestId <- getRequestId reqHdrs
+    (sc, scVer) <- liftIO $ IORef.readIORef gCtxMapRef
+    execPlanE <-
+      runExceptT $
+      E.getExecPlan
+        pgExecCtx
+        planCache
+        userInfo
+        sqlGenCtx
+        enableAL
+        sc
+        scVer
+        q
+    execPlans <- either (withComplete . preExecErr requestId) return execPlanE
+    let execCtx = E.ExecutionCtx logger sqlGenCtx pgExecCtx
                 planCache sc scVer httpMgr enableAL
+    forM_ execPlans $ \execPlan ->
+      case execPlan of
+        E.Leaf plan -> case plan of
+          E.ExPHasura resolvedOp -> runHasuraGQ requestId q userInfo resolvedOp
+          E.ExPRemote rtf        -> runRemoteGQ execCtx requestId userInfo reqHdrs rtf
+          -- E.ExPMixed {}          -> postExecErr requestId
+                                   -- (err400 NotSupported "remote relationships not supported over websocket")
+        E.Tree {} -> postExecErr requestId
+                       (err400 NotSupported "remote relationships not supported over websocket")
 
-  case execPlan of
-    E.GExPHasura resolvedOp ->
-      runHasuraGQ requestId q userInfo resolvedOp
-    E.GExPRemote rsi opDef  ->
-      runRemoteGQ execCtx requestId userInfo reqHdrs opDef rsi
   where
-    runHasuraGQ :: RequestId -> GQLReqUnparsed -> UserInfo -> E.ExecOp
-                -> ExceptT () IO ()
-    runHasuraGQ reqId query userInfo = \case
-      E.ExOpQuery opTx genSql ->
-        execQueryOrMut reqId query genSql $ runLazyTx' pgExecCtx opTx
-      E.ExOpMutation opTx ->
-        execQueryOrMut reqId query Nothing $
-          runLazyTx pgExecCtx $ withUserInfo userInfo opTx
-      E.ExOpSubs lqOp -> do
-        -- log the graphql query
-        liftIO $ logGraphqlQuery logger $ QueryLog query Nothing reqId
-        lqId <- liftIO $ LQ.addLiveQuery lqMap lqOp liveQOnChange
-        liftIO $ STM.atomically $
-          STMMap.insert (lqId, _grOperationName q) opId opMap
-        logOpEv ODStarted (Just reqId)
+    runHasuraGQ :: RequestId -> GQLReqUnparsed -> UserInfo -> E.ExecOp -> ExceptT () IO ()
+    runHasuraGQ reqId query userInfo =
+      \case
+        E.ExOpQuery opTx genSql ->
+          execQueryOrMut reqId query genSql $ runLazyTx' pgExecCtx opTx
+        E.ExOpMutation opTx ->
+          execQueryOrMut reqId query Nothing $ runLazyTx pgExecCtx $ withUserInfo userInfo opTx
+        E.ExOpSubs lqOp -> do
+          liftIO $ logGraphqlQuery logger $ QueryLog query Nothing reqId
+          lqId <- liftIO $ LQ.addLiveQuery lqMap lqOp liveQOnChange
+          liftIO $
+            STM.atomically $ STMMap.insert (lqId, _grOperationName q) opId opMap
+          logOpEv ODStarted (Just reqId)
 
     execQueryOrMut reqId query genSql action = do
       logOpEv ODStarted (Just reqId)
@@ -311,20 +323,29 @@ onStart serverEnv wsConn (StartMsg opId q) = catchAndIgnore $ do
       either (postExecErr reqId) sendSuccResp resp
       sendCompleted (Just reqId)
 
-    runRemoteGQ :: E.ExecutionCtx -> RequestId -> UserInfo -> [H.Header]
-                -> G.TypedOperationDefinition -> RemoteSchemaInfo
-                -> ExceptT () IO ()
-    runRemoteGQ execCtx reqId userInfo reqHdrs opDef rsi = do
-      when (G._todType opDef == G.OperationTypeSubscription) $
+    runRemoteGQ ::
+      E.ExecutionCtx -> RequestId -> UserInfo -> [H.Header] -> VQ.RemoteTopField -> ExceptT () IO ()
+    runRemoteGQ execCtx reqId userInfo reqHdrs topField
+      -- if it's not a subscription, use HTTP to execute the query on the remote
+      -- server
+      -- try to parse the (apollo protocol) websocket frame and get only the
+      -- payload
+     = do
+      when (rtqOperationType topField == G.OperationTypeSubscription) $
         withComplete $ preExecErr reqId $
         err400 NotSupported "subscription to remote server is not supported"
-
-      -- if it's not a subscription, use HTTP to execute the query on the remote
-      resp <- runExceptT $ flip runReaderT execCtx $
-              E.execRemoteGQ reqId userInfo reqHdrs q rsi opDef
+      resp <-
+        let (rsi, fields) = remoteTopQueryEither topField
+         in runExceptT $ flip runReaderT execCtx $
+            E.execRemoteGQ
+              reqId
+              userInfo
+              reqHdrs
+              (rtqOperationType topField)
+              rsi
+              fields
       either (postExecErr reqId) (sendRemoteResp reqId . _hrBody) resp
       sendCompleted (Just reqId)
-
     sendRemoteResp reqId resp =
       case J.eitherDecodeStrict (encJToBS resp) of
         Left e    -> postExecErr reqId $ invalidGqlErr $ T.pack e

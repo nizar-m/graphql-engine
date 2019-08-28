@@ -32,9 +32,14 @@ library
                      , src-exec
   default-language:    Haskell2010
   build-depends:       base
+                     , these
+                     , bifunctors
+                     , witherable
+                     , validation
                      , pg-client
                      , text
                      , text-builder >= 0.6
+                     , vector-builder
                      , bytestring
                      , postgresql-libpq
                      , mtl
@@ -181,6 +186,7 @@ library
                      , Hasura.RQL.Types.RemoteSchema
                      , Hasura.RQL.Types.Metadata
                      , Hasura.RQL.Types.QueryCollection
+                     , Hasura.RQL.Types.RemoteRelationship
                      , Hasura.RQL.DDL.Deps
                      , Hasura.RQL.DDL.Permission.Internal
                      , Hasura.RQL.DDL.Permission.Triggers
@@ -198,6 +204,7 @@ library
                      , Hasura.RQL.DDL.Headers
                      , Hasura.RQL.DDL.RemoteSchema
                      , Hasura.RQL.DDL.QueryCollection
+                     , Hasura.RQL.DDL.RemoteRelationship.Validate
                      , Hasura.RQL.DML.Delete
                      , Hasura.RQL.DML.Internal
                      , Hasura.RQL.DML.Insert
@@ -240,6 +247,7 @@ library
                      , Hasura.GraphQL.Execute.LiveQuery.Types
                      , Hasura.GraphQL.Execute.LiveQuery.Multiplexed
                      , Hasura.GraphQL.Execute.LiveQuery.Fallback
+                     , Hasura.GraphQL.Execute.RemoteJoins
                      , Hasura.GraphQL.Resolve
                      , Hasura.GraphQL.Resolve.Types
                      , Hasura.GraphQL.Resolve.Context
@@ -260,6 +268,7 @@ library
 
                      , Data.Text.Extended
                      , Data.Aeson.Extended
+                     , Data.Aeson.Ordered
                      , Data.Sequence.NonEmpty
                      , Data.TByteString
                      , Data.HashMap.Strict.InsOrd.Extended
@@ -284,6 +293,7 @@ library
                       InstanceSigs
                       MultiParamTypeClasses
                       LambdaCase
+                      RecordWildCards
                       MultiWayIf
                       TupleSections
                       DeriveFoldable
@@ -320,6 +330,7 @@ executable graphql-engine
                       InstanceSigs
                       MultiParamTypeClasses
                       LambdaCase
+                      RecordWildCards
                       MultiWayIf
                       TupleSections
                       DeriveFoldable

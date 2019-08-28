@@ -15,6 +15,7 @@ module Hasura.EncJSON
   , encJFromAssocList
   ) where
 
+import qualified Data.ByteString.Char8   as S8
 import           Hasura.Prelude
 
 import qualified Data.Aeson              as J
@@ -30,6 +31,8 @@ import qualified Database.PG.Query       as Q
 newtype EncJSON
   = EncJSON { unEncJSON :: BB.Builder }
   deriving (Semigroup, Monoid, IsString)
+
+instance Show EncJSON where show = S8.unpack . encJToBS
 
 instance Q.FromCol EncJSON where
   fromCol = fmap encJFromBS . Q.fromCol

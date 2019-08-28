@@ -245,7 +245,7 @@ mkBoolExpInp tn fields =
     boolExpTy = mkBoolExpTy tn
 
     -- all the fields of this input object
-    inpValues = combinators <> map mkFldExpInp fields
+    inpValues = combinators <> mapMaybe mkFldExpInp fields
 
     mk n ty = InpValInfo Nothing n Nothing $ G.toGT ty
 
@@ -258,7 +258,8 @@ mkBoolExpInp tn fields =
       ]
 
     mkFldExpInp = \case
-      Left (PGColInfo colName colTy _) ->
+      SelFldCol (PGColInfo colName colTy _) -> Just $
         mk (mkColName colName) (mkCompExpTy colTy)
-      Right (RelInfo relName _ _ remTab _, _, _, _, _) ->
+      SelFldRel (RelInfo relName _ _ remTab _, _, _, _, _) -> Just $
         mk (mkRelName relName) (mkBoolExpTy remTab)
+      SelFldRemote {} -> Nothing

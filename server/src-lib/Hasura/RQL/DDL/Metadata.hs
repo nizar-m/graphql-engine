@@ -123,6 +123,7 @@ clearMetadata = Q.catchE defaultTxErrorHandler $ do
   Q.unitQ "DELETE FROM hdb_catalog.hdb_permission WHERE is_system_defined <> 'true'" () False
   Q.unitQ "DELETE FROM hdb_catalog.hdb_relationship WHERE is_system_defined <> 'true'" () False
   Q.unitQ "DELETE FROM hdb_catalog.event_triggers" () False
+  Q.unitQ "DELETE FROM hdb_catalog.hdb_remote_relationship" () False
   Q.unitQ "DELETE FROM hdb_catalog.hdb_table WHERE is_system_defined <> 'true'" () False
   Q.unitQ "DELETE FROM hdb_catalog.remote_schemas" () False
   Q.unitQ "DELETE FROM hdb_catalog.hdb_allowlist" () False
@@ -505,4 +506,5 @@ purgeMetadataObj = liftTx . \case
   (MORemoteSchema rsn)            -> DRS.removeRemoteSchemaFromCatalog rsn
   (MOTableObj qt (MTORel rn _))   -> DR.delRelFromCatalog qt rn
   (MOTableObj qt (MTOPerm rn pt)) -> DP.dropPermFromCatalog qt rn pt
-  (MOTableObj _ (MTOTrigger trn)) -> DE.delEventTriggerFromCatalog trn
+  (MOTableObj _ (MTOEventTrigger trn)) -> DE.delEventTriggerFromCatalog trn
+  (MOTableObj qt (MTORemoteRelationship rn)) -> DR.delRemoteRelFromCatalog qt rn

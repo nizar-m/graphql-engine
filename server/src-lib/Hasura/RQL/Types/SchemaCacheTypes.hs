@@ -6,16 +6,19 @@ import           Data.Aeson.TH
 import           Data.Aeson.Types
 import           Hasura.Prelude
 
-import qualified Data.Text                     as T
+import qualified Data.Text                           as T
 
 import           Hasura.RQL.Types.Common
 import           Hasura.RQL.Types.EventTrigger
 import           Hasura.RQL.Types.Permission
+import           Hasura.RQL.Types.RemoteRelationship
+import           Hasura.RQL.Types.RemoteSchema
 import           Hasura.SQL.Types
 
 data TableObjId
   = TOCol !PGCol
   | TORel !RelName
+  | TORemoteRel !RemoteRelationshipName
   | TOCons !ConstraintName
   | TOPerm !RoleName !PermType
   | TOTrigger !TriggerName
@@ -27,6 +30,7 @@ data SchemaObjId
   = SOTable !QualifiedTable
   | SOTableObj !QualifiedTable !TableObjId
   | SOFunction !QualifiedFunction
+  | SORemoteSchema !RemoteSchemaName
    deriving (Eq, Generic)
 
 instance Hashable SchemaObjId
@@ -38,6 +42,8 @@ reportSchemaObj (SOTableObj tn (TOCol cn)) =
   "column " <> qualObjectToText tn <> "." <> getPGColTxt cn
 reportSchemaObj (SOTableObj tn (TORel cn)) =
   "relationship " <> qualObjectToText tn <> "." <> relNameToTxt cn
+reportSchemaObj (SOTableObj tn (TORemoteRel rn)) =
+  "remote relationship " <> qualObjectToText tn <> "." <> unRemoteRelationshipName rn
 reportSchemaObj (SOTableObj tn (TOCons cn)) =
   "constraint " <> qualObjectToText tn <> "." <> getConstraintTxt cn
 reportSchemaObj (SOTableObj tn (TOPerm rn pt)) =
@@ -45,6 +51,7 @@ reportSchemaObj (SOTableObj tn (TOPerm rn pt)) =
   <> "." <> permTypeToCode pt
 reportSchemaObj (SOTableObj tn (TOTrigger trn )) =
   "event-trigger " <> qualObjectToText tn <> "." <> triggerNameToTxt trn
+reportSchemaObj (SORemoteSchema remoteSchemaName) = "remote schema " <> unNonEmptyText (unRemoteSchemaName remoteSchemaName)
 
 instance Show SchemaObjId where
   show soi = T.unpack $ reportSchemaObj soi

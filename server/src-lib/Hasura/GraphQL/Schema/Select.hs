@@ -146,10 +146,27 @@ mkTableObj
 mkTableObj tn allowedFlds =
   mkObjTyInfo (Just desc) (mkTableTy tn) Set.empty (mapFromL _fiName flds) TLHasuraType
   where
-    flds = concatMap (either (pure . mkPGColFld) mkRelFld') allowedFlds
+    flds =                                                                                                                                             
+      concatMap                                                                                                                                        
+        (\case                                                                                                                                         
+            SelFldCol pgColInfo -> pure (mkPGColFld pgColInfo)                                                                                         
+            SelFldRel selFldRel -> mkRelFld' selFldRel                                                                                                 
+            SelFldRemote remoteField ->                                                                                                                
+              pure (mkRemoteFld remoteField))                                                                                                          
+        allowedFlds                                                                                                                                    
     mkRelFld' (relInfo, allowAgg, _, _, isNullable) =
       mkRelFld allowAgg relInfo isNullable
     desc = G.Description $ "columns and relationships of " <>> tn
+
+mkRemoteFld :: RemoteField -> ObjFldInfo                                                                                                               
+mkRemoteFld remoteField = mkHsraObjFldInfo description fieldName paramMap gType                                                                        
+  where                                                                                                                                                
+    description = Just "Remote relationship field"                                                                                                     
+    fieldName =                                                                                                                                        
+      G.Name                                                                                                                                           
+        (unRemoteRelationshipName (rtrName (rmfRemoteRelationship remoteField)))                                                                       
+    paramMap = rmfParamMap remoteField                                                                                                                 
+    gType = rmfGType remoteField                  
 
 {-
 type table_aggregate {

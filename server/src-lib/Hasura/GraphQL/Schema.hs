@@ -11,11 +11,11 @@ module Hasura.GraphQL.Schema
   , isAggFld
   , qualObjectToName
   , ppGCtx
-
   , checkConflictingNode
   , checkSchemaConflicts
   ) where
 
+import           Control.Lens                        (preview)
 
 import qualified Data.HashMap.Strict                   as Map
 import qualified Data.HashSet                          as Set
@@ -25,7 +25,7 @@ import qualified Data.Text                             as T
 import qualified Language.GraphQL.Draft.Syntax         as G
 
 import           Hasura.GraphQL.Context
-import           Hasura.GraphQL.Resolve.Types
+import           Hasura.GraphQL.Resolve.Context
 import           Hasura.GraphQL.Validate.Types
 import           Hasura.Prelude
 import           Hasura.RQL.DML.Internal               (mkAdminRolePermInfo)
@@ -67,9 +67,15 @@ isValidRel :: ToTxt a => RelName -> QualifiedObject a -> Bool
 isValidRel rn rt = isValidName (mkRelName rn) && isValidObjectName rt
 
 isValidField :: FieldInfo -> Bool
-isValidField = \case
-  FIColumn (PGColInfo col _ _) -> isValidCol col
-  FIRelationship (RelInfo rn _ _ remTab _) -> isValidRel rn remTab
+isValidField =
+  \case
+    FIColumn (PGColInfo col _ _) -> isValidCol col
+    FIRelationship (RelInfo rn _ _ remTab _) -> isValidRel rn remTab
+    FIRemote remoteField ->
+      isValidName
+        (G.Name
+           (unRemoteRelationshipName
+              (rtrName (rmfRemoteRelationship remoteField))))
 
 upsertable :: [ConstraintName] -> Bool -> Bool -> Bool
 upsertable uniqueOrPrimaryCons isUpsertAllowed view =
@@ -175,7 +181,7 @@ mkGCtxRole' tn insPermM selPermM updColsM
 
     -- helper
     mkColFldMap ty cols = Map.fromList $ flip map cols $
-      \c -> ((ty, mkColName $ pgiName c), Left c)
+      \c -> ((ty, mkColName $ pgiName c), FldCol c)
 
     -- insert input type
     insInpObjM = uncurry (mkInsInp tn) <$> insPermM
@@ -194,7 +200,7 @@ mkGCtxRole' tn insPermM selPermM updColsM
     updSetInpObjFldsM = mkColFldMap (mkUpdSetTy tn) <$> updColsM
 
     selFldsM = snd <$> selPermM
-    selColsM = (map pgiName . lefts) <$> selFldsM
+    selColsM = (map pgiName . mapMaybe (preview _SelFldCol)) <$> selFldsM
     selColInpTyM = mkSelColumnTy tn <$> selColsM
     -- boolexp input type
     boolExpInpObjM = case selFldsM of
@@ -215,17 +221,20 @@ mkGCtxRole' tn insPermM selPermM updColsM
     -- helper
     mkFldMap ty = Map.fromList . concatMap (mkFld ty)
     mkFld ty = \case
-      Left ci -> [((ty, mkColName $ pgiName ci), Left ci)]
-      Right (ri, allowAgg, perm, lim, _) ->
+      SelFldCol ci -> [((ty, mkColName $ pgiName ci), FldCol ci)]
+      SelFldRel (ri, allowAgg, perm, lim, _) ->
         let relFld = ( (ty, mkRelName $ riName ri)
-                     , Right (ri, False, perm, lim)
+                     , FldRel (ri, False, perm, lim)
                      )
             aggRelFld = ( (ty, mkAggRelName $ riName ri)
-                        , Right (ri, True, perm, lim)
+                        , FldRel (ri, True, perm, lim)
                         )
         in case riType ri of
           ObjRel -> [relFld]
           ArrRel -> bool [relFld] [relFld, aggRelFld] allowAgg
+      SelFldRemote remoteField ->
+        [( (ty, G.Name (unRemoteRelationshipName (rtrName (rmfRemoteRelationship remoteField))))
+         , FldRemote remoteField)]
 
     -- the fields used in bool exp
     boolExpInpObjFldsM = mkFldMap (mkBoolExpTy tn) <$> selFldsM
@@ -255,8 +264,8 @@ mkGCtxRole' tn insPermM selPermM updColsM
         in (objs, ordByInps)
       _ -> ([], [])
 
-    getNumCols = onlyNumCols . lefts
-    getCompCols = onlyComparableCols . lefts
+    getNumCols = onlyNumCols . mapMaybe (preview _SelFldCol)
+    getCompCols = onlyComparableCols . mapMaybe (preview _SelFldCol)
     onlyFloat = const $ mkScalarTy PGFloat
 
     mkTypeMaker "sum" = mkScalarTy
@@ -382,18 +391,21 @@ getSelPerm
 getSelPerm tableCache fields role selPermInfo = do
   selFlds <- fmap catMaybes $ forM (toValidFieldInfos fields) $ \case
     FIColumn pgColInfo ->
-      return $ fmap Left $ bool Nothing (Just pgColInfo) $
+      return $ fmap SelFldCol $ bool Nothing (Just pgColInfo) $
       Set.member (pgiName pgColInfo) allowedCols
     FIRelationship relInfo -> do
       remTableInfo <- getTabInfo tableCache $ riRTable relInfo
       let remTableSelPermM = getSelPermission remTableInfo role
       return $ flip fmap remTableSelPermM $
-        \rmSelPermM -> Right ( relInfo
+        \rmSelPermM -> SelFldRel
+                             ( relInfo
                              , spiAllowAgg rmSelPermM
                              , spiFilter rmSelPermM
                              , spiLimit rmSelPermM
                              , isRelNullable fields relInfo
                              )
+    -- TODO: Derive permissions for remote relationships
+    FIRemote remoteField  -> pure $ Just (SelFldRemote remoteField)
   return (spiAllowAgg selPermInfo, selFlds)
   where
     allowedCols = spiCols selPermInfo
@@ -538,8 +550,9 @@ mkGCtxMapTable tableCache funcCache tabInfo = do
     tabFuncs = filter (isValidObjectName . fiName) $
                getFuncsOfTable tn funcCache
     selFlds = flip map (toValidFieldInfos fields) $ \case
-      FIColumn pgColInfo     -> Left pgColInfo
-      FIRelationship relInfo -> Right (relInfo, True, noFilter, Nothing, isRelNullable fields relInfo)
+      FIColumn pgColInfo     -> SelFldCol pgColInfo
+      FIRelationship relInfo -> SelFldRel (relInfo, True, noFilter, Nothing, isRelNullable fields relInfo)
+      FIRemote relInfo -> SelFldRemote relInfo
     adminRootFlds =
       getRootFldsRole' tn pkeyCols validConstraints fields tabFuncs
       (Just ([], True)) (Just (noFilter, Nothing, [], True))
@@ -646,7 +659,8 @@ mkGCtx tyAgg (RootFlds flds) insCtxMap =
      (Map.map fst flds) insCtxMap
   where
     TyAgg tyInfos fldInfos scalars ordByEnums = tyAgg
-    colTys = Set.fromList $ map pgiType $ lefts $ Map.elems fldInfos
+    colTys = Set.fromList $ map pgiType $
+               mapMaybe (preview _FldCol) $ Map.elems fldInfos
     mkMutRoot =
       mkHsraObjTyInfo (Just "mutation root") (G.NamedType "mutation_root") Set.empty .
       mapFromL _fiName

@@ -202,6 +202,7 @@ buildJsonObject pfx parAls arrRelCtx strfyNum flds =
         let arrPfx = _aniPrefix $ mkArrNodeInfo pfx parAls arrRelCtx $
                                ANIField (fldAls, arrSel)
         in S.mkQIdenExp arrPfx fldAls
+      FRemote -> S.SELit "null: remote field selected"
 
     toSQLCol :: PGColInfo -> Maybe ColOp -> S.SQLExp
     toSQLCol col colOpM =

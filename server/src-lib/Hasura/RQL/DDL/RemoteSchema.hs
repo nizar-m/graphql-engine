@@ -12,16 +12,18 @@ module Hasura.RQL.DDL.RemoteSchema
 
 import           Hasura.EncJSON
 import           Hasura.Prelude
+import           Hasura.RQL.DDL.Deps
 
-import qualified Data.Aeson                  as J
-import qualified Data.HashMap.Strict         as Map
-import qualified Database.PG.Query           as Q
+import qualified Data.Aeson                   as J
+import qualified Data.HashMap.Strict          as Map
+import qualified Database.PG.Query            as Q
 
 import           Hasura.GraphQL.RemoteServer
 import           Hasura.RQL.Types
 import           Hasura.SQL.Types
 
-import qualified Hasura.GraphQL.Schema       as GS
+import qualified Hasura.GraphQL.Schema        as GS
+import qualified Hasura.RQL.Types.SchemaCache as SC
 
 runAddRemoteSchema
   :: ( QErrM m, UserInfoM m
@@ -86,6 +88,13 @@ removeRemoteSchemaP1 rsn = do
   let rmSchemas = scRemoteSchemas sc
   void $ onNothing (Map.lookup rsn rmSchemas) $
     throw400 NotExists "no such remote schema"
+  case Map.lookup rsn rmSchemas of
+    Just _  -> return ()
+    Nothing -> throw400 NotExists "no such remote schema"
+  let depObjs = getDependentObjs sc remoteSchemaDepId
+  when (depObjs /= []) $ reportDeps depObjs
+  where
+    remoteSchemaDepId = SORemoteSchema rsn
 
 removeRemoteSchemaP2
   :: ( CacheRWM m
@@ -125,8 +134,12 @@ buildGCtxMap = do
   let gCtxMap = scGCtxMap sc
   -- Stitch remote schemas
   (mergedGCtxMap, defGCtx) <- mergeSchemas (scRemoteSchemas sc) gCtxMap
-  writeSchemaCache sc { scGCtxMap = mergedGCtxMap
-                      , scDefaultRemoteGCtx = defGCtx
+  -- Add remote relationship types
+  let remoteRelInputTypes = scRemoteRelInputTypes sc
+      newGCtxMap = Map.map (SC.mergeRemoteTypesWithGCtx remoteRelInputTypes) mergedGCtxMap
+      newDefGCtx = mergeRemoteTypesWithGCtx remoteRelInputTypes defGCtx
+  writeSchemaCache sc { scGCtxMap = newGCtxMap
+                      , scDefaultRemoteGCtx = newDefGCtx
                       }
 
 addRemoteSchemaToCatalog

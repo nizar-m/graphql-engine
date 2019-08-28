@@ -2,6 +2,7 @@ module Hasura.GraphQL.Resolve.Types where
 
 import           Hasura.Prelude
 
+import           Control.Lens
 import qualified Data.HashMap.Strict           as Map
 import qualified Data.Sequence                 as Seq
 import qualified Data.Text                     as T
@@ -10,6 +11,7 @@ import qualified Language.GraphQL.Draft.Syntax as G
 import           Hasura.RQL.Types.BoolExp
 import           Hasura.RQL.Types.Common
 import           Hasura.RQL.Types.Permission
+import           Hasura.RQL.Types.RemoteRelationship
 import           Hasura.SQL.Types
 import           Hasura.SQL.Value
 
@@ -31,6 +33,8 @@ data SelOpCtx
   , _socLimit   :: !(Maybe Int)
   } deriving (Show, Eq)
 
+type PGColArgMap = Map.HashMap G.Name PGColInfo
+
 data SelPkOpCtx
   = SelPkOpCtx
   { _spocTable   :: !QualifiedTable
@@ -38,6 +42,12 @@ data SelPkOpCtx
   , _spocFilter  :: !AnnBoolExpPartialSQL
   , _spocArgMap  :: !PGColArgMap
   } deriving (Show, Eq)
+
+newtype FuncArgItem
+  = FuncArgItem {getArgName :: G.Name}
+  deriving (Show, Eq)
+
+type FuncArgSeq = Seq.Seq FuncArgItem
 
 data FuncQOpCtx
   = FuncQOpCtx
@@ -77,9 +87,17 @@ data OpCtx
   | OCDelete !DelOpCtx
   deriving (Show, Eq)
 
+data TypedField
+  = FldCol PGColInfo
+  | FldRel (RelInfo, Bool, AnnBoolExpPartialSQL, Maybe Int)
+  | FldRemote RemoteField
+  deriving (Show, Eq)
+
+$(makePrisms ''TypedField)
+
 type FieldMap
   = Map.HashMap (G.NamedType, G.Name)
-    (Either PGColInfo (RelInfo, Bool, AnnBoolExpPartialSQL, Maybe Int))
+    TypedField
 
 -- order by context
 data OrdByItem
@@ -91,12 +109,6 @@ data OrdByItem
 type OrdByItemMap = Map.HashMap G.Name OrdByItem
 
 type OrdByCtx = Map.HashMap G.NamedType OrdByItemMap
-
-newtype FuncArgItem
-  = FuncArgItem {getArgName :: G.Name}
-  deriving (Show, Eq)
-
-type FuncArgSeq = Seq.Seq FuncArgItem
 
 -- insert context
 type RelationInfoMap = Map.HashMap RelName RelInfo
@@ -118,8 +130,6 @@ data InsCtx
   } deriving (Show, Eq)
 
 type InsCtxMap = Map.HashMap QualifiedTable InsCtx
-
-type PGColArgMap = Map.HashMap G.Name PGColInfo
 
 data AnnPGVal
   = AnnPGVal

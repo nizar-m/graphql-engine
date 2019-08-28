@@ -43,6 +43,10 @@ data RQLQuery
   | RQSetRelationshipComment !SetRelComment
   | RQRenameRelationship !RenameRel
 
+  | RQCreateRemoteRelationship !RemoteRelationship
+  | RQUpdateRemoteRelationship !RemoteRelationship
+  | RQDeleteRemoteRelationship !DeleteRemoteRelationship
+
   | RQCreateInsertPermission !CreateInsPerm
   | RQCreateSelectPermission !CreateSelPerm
   | RQCreateUpdatePermission !CreateUpdPerm
@@ -180,6 +184,10 @@ queryNeedsReload qi = case qi of
   RQSetRelationshipComment  _     -> False
   RQRenameRelationship _          -> True
 
+  RQCreateRemoteRelationship _    -> True
+  RQUpdateRemoteRelationship _    -> True
+  RQDeleteRemoteRelationship _    -> True
+
   RQCreateInsertPermission _      -> True
   RQCreateSelectPermission _      -> True
   RQCreateUpdatePermission _      -> True
@@ -275,6 +283,10 @@ runQueryM rq =
       RQAddRemoteSchema    q       -> runAddRemoteSchema q
       RQRemoveRemoteSchema q       -> runRemoveRemoteSchema q
       RQReloadRemoteSchema q       -> runReloadRemoteSchema q
+
+      RQCreateRemoteRelationship q -> runCreateRemoteRelationship q
+      RQUpdateRemoteRelationship q -> runUpdateRemoteRelationship q
+      RQDeleteRemoteRelationship q -> runDeleteRemoteRelationship q
 
       RQCreateEventTrigger q       -> runCreateEventTriggerQuery q
       RQDeleteEventTrigger q       -> runDeleteEventTriggerQuery q

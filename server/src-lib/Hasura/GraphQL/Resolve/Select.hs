@@ -28,6 +28,7 @@ import qualified Database.PG.Query                 as Q
 import qualified Hasura.RQL.DML.Select             as RS
 import qualified Hasura.SQL.DML                    as S
 
+import           Hasura.GraphQL.Resolve.Types
 import           Hasura.GraphQL.Resolve.BoolExp
 import           Hasura.GraphQL.Resolve.Context
 import           Hasura.GraphQL.Resolve.InputValue
@@ -70,9 +71,9 @@ fromSelSet fldTy flds =
       _ -> do
         fldInfo <- getFldInfo fldTy fldName
         case fldInfo of
-          Left colInfo ->
+          FldCol colInfo ->
             RS.FCol colInfo <$> argsToColOp (_fArguments fld)
-          Right (relInfo, isAgg, tableFilter, tableLimit) -> do
+          FldRel (relInfo, isAgg, tableFilter, tableLimit) -> do
             let relTN = riRTable relInfo
                 colMapping = riMapping relInfo
                 rn = riName relInfo
@@ -85,6 +86,7 @@ fromSelSet fldTy flds =
               return $ case riType relInfo of
                 ObjRel -> RS.FObj annRel
                 ArrRel -> RS.FArr $ RS.ASSimple annRel
+          FldRemote _ -> return RS.FRemote
 
 type TableAggFlds = RS.TableAggFldsG UnresolvedVal
 

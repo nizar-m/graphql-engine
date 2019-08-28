@@ -18,6 +18,7 @@ module Hasura.RQL.Types
        , QCtx(..)
        , HasQCtx(..)
        , mkAdminQCtx
+
        , askTabInfo
        , askFieldInfoMap
        , askPGType
@@ -28,6 +29,8 @@ module Hasura.RQL.Types
        , askCurRole
        , askEventTriggerInfo
        , askTabInfoFromTrigger
+       , askRemoteRel
+       , assertRemoteRel
 
        , adminOnly
 
@@ -37,26 +40,28 @@ module Hasura.RQL.Types
        , module R
        ) where
 
-import           Hasura.Db                     as R
+import           Hasura.Db                           as R
 import           Hasura.EncJSON
 import           Hasura.Prelude
-import           Hasura.RQL.Types.BoolExp      as R
-import           Hasura.RQL.Types.Common       as R
-import           Hasura.RQL.Types.DML          as R
-import           Hasura.RQL.Types.Error        as R
-import           Hasura.RQL.Types.EventTrigger as R
-import           Hasura.RQL.Types.Metadata     as R
-import           Hasura.RQL.Types.Permission   as R
-import           Hasura.RQL.Types.RemoteSchema as R
-import           Hasura.RQL.Types.SchemaCache  as R
+import           Hasura.RQL.Types.BoolExp            as R
+import           Hasura.RQL.Types.Common             as R
+import           Hasura.RQL.Types.DML                as R
+import           Hasura.RQL.Types.Error              as R
+import           Hasura.RQL.Types.EventTrigger       as R
+import           Hasura.RQL.Types.Metadata           as R
+import           Hasura.RQL.Types.Permission         as R
+import           Hasura.RQL.Types.RemoteRelationship as R
+import           Hasura.RQL.Types.RemoteSchema       as R
+import           Hasura.RQL.Types.SchemaCache        as R
 
 import           Hasura.SQL.Types
 
-import qualified Hasura.GraphQL.Context        as GC
+import qualified Hasura.GraphQL.Context              as GC
 
-import qualified Data.HashMap.Strict           as M
-import qualified Data.Text                     as T
-import qualified Network.HTTP.Client           as HTTP
+import qualified Data.HashMap.Strict                 as M
+import qualified Data.Text                           as T
+import qualified Network.HTTP.Client                 as HTTP
+
 
 getFieldInfoMap
   :: QualifiedTable
@@ -236,6 +241,25 @@ askFieldInfo m f =
     throw400 NotExists $ mconcat
     [ f <<> " does not exist"
     ]
+
+assertRemoteRel :: (MonadError QErr m)
+            => FieldInfoMap
+            -> RemoteRelationshipName
+            -> m ()
+assertRemoteRel fieldInfoMap relName = do
+  _ <- askRemoteRel fieldInfoMap relName
+  return ()
+
+askRemoteRel :: (MonadError QErr m)
+           => FieldInfoMap
+           -> RemoteRelationshipName
+           -> m RemoteField
+askRemoteRel fieldInfoMap relName = do
+  fieldInfo <- askFieldInfo fieldInfoMap (FieldName (unRemoteRelationshipName relName))
+  case fieldInfo of
+    (FIRemote remoteField) -> return remoteField
+    _                        ->
+      throwError $ err400 UnexpectedPayload "expecting a remote relationship"
 
 askCurRole :: (UserInfoM m) => m RoleName
 askCurRole = userRole <$> askUserInfo
