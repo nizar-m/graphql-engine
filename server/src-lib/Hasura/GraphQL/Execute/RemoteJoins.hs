@@ -11,7 +11,6 @@ module Hasura.GraphQL.Execute.RemoteJoins
   , parseGQRespValue
   , extractRemoteRelArguments
   , produceBatch
-  , produceBatches
   , joinResults
   , emptyResp
   , rebuildFieldStrippingRemoteRels
@@ -22,6 +21,7 @@ import           Control.Arrow                          (first)
 import           Control.Lens
 import           Data.Scientific
 import           Data.String
+import           Data.Traversable
 import           Data.Validation
 import           Hasura.SQL.Types
 import           Data.List
@@ -38,9 +38,7 @@ import qualified Data.HashMap.Strict.InsOrd             as OHM
 import qualified Data.Sequence                          as Seq
 import qualified Data.String.Conversions                as CS
 import qualified Data.Text                              as T
-import qualified Data.Vector                            as V
 import qualified VectorBuilder.Builder                  as VB 
-import qualified VectorBuilder.Vector                   as VB
 import qualified Language.GraphQL.Draft.Syntax          as G
 import qualified Hasura.GraphQL.Validate                as VQ
 
@@ -51,72 +49,6 @@ import           Hasura.Prelude
 import           Hasura.RQL.Types
 import           Hasura.SQL.Value
 
--- | https://graphql.github.io/graphql-spec/June2018/#sec-Response-Format
---
--- NOTE: this type and parseGQRespValue are a lax representation of the spec,
--- since...
---   - remote GraphQL servers may not conform strictly, and...
---   - we use this type as an accumulator.
---
--- Ideally we'd have something correct by construction for hasura results
--- someplace.
-data GQRespValue =
-  GQRespValue
-  { _gqRespData   :: OJ.Object
-  -- ^ 'OJ.empty' (corresponding to the invalid `"data": {}`) indicates an error.
-  , _gqRespErrors :: VB.Builder OJ.Value
-  -- ^ An 'OJ.Array', but with efficient cons and concatenation. Null indicates
-  -- query success.
-  }
--- TODO consider unifying this type with Hasura.GraphQL.Transport.HTTP.Protocol.
-
-makeLenses ''GQRespValue
-
-parseGQRespValue :: EncJSON -> Either String GQRespValue
-parseGQRespValue = OJ.eitherDecode . encJToLBS >=> \case
-  OJ.Object obj -> do
-    _gqRespData <-
-      case OJ.lookup "data" obj of
-        -- "an error was encountered before execution began":
-        Nothing -> pure OJ.empty
-        -- "an error was encountered during the execution that prevented a valid response":
-        Just OJ.Null -> pure OJ.empty
-        Just (OJ.Object dobj) -> pure dobj
-        Just _ -> Left "expected object or null for GraphQL data response"
-    _gqRespErrors <-
-      case OJ.lookup "errors" obj of
-        Nothing -> pure VB.empty
-        Just (OJ.Array vec) -> pure $ VB.vector vec
-        Just _ -> Left "expected array for GraphQL error response"
-    pure (GQRespValue {_gqRespData, _gqRespErrors})
-  _ -> Left "expected object for GraphQL response"
-
-encodeGQRespValue :: GQRespValue -> EncJSON
-encodeGQRespValue GQRespValue{..} = OJ.toEncJSON $ OJ.Object $ OJ.fromList $
-  -- "If the data entry in the response is not present, the errors entry in the
-  -- response must not be empty. It must contain at least one error. "
-  if _gqRespData == OJ.empty && not anyErrors
-    then
-      let msg = "Somehow did not accumulate any errors or data from graphql queries"
-       in [("errors", OJ.Array $ V.singleton $ gQJoinErrorToValue msg)]
-    else
-      -- NOTE: "If an error was encountered during the execution that prevented
-      -- a valid response, the data entry in the response should be null."
-      -- TODO it's not clear to me how we can enforce that here or if we should try.
-      ("data", OJ.Object _gqRespData) :
-      [("errors", OJ.Array gqRespErrorsV) | anyErrors ]
-  where 
-    gqRespErrorsV = VB.build _gqRespErrors
-    anyErrors = not $ V.null gqRespErrorsV
-
-newtype GQJoinError =  GQJoinError T.Text
-  deriving (Show, Eq, IsString, Monoid, Semigroup)
-
--- | https://graphql.github.io/graphql-spec/June2018/#sec-Errors  "Error result format"
-gQJoinErrorToValue :: GQJoinError -> OJ.Value
-gQJoinErrorToValue (GQJoinError msg) =
-  OJ.Object (OJ.fromList [("message", OJ.String msg)])
-
 newtype RemoteRelKey =
   RemoteRelKey Int
   deriving (Eq, Ord, Show, Hashable)
@@ -124,12 +56,10 @@ newtype RemoteRelKey =
 data RemoteRelField =
   RemoteRelField
     { rrRemoteField   :: !RemoteField
-    , rrField         :: !Field
-    -- ^ TODO Dedupe data since (_fRemoteRel rrField) == Just rrRemoteField
-    -- maybe we need to just unpack part of the Field here (DuplicateRecordNames could help here)
+    , rrArguments     :: !ArgsMap
+    , rrSelSet        :: !SelSet
     , rrRelFieldPath  :: !RelFieldPath
     , rrAlias         :: !G.Alias
-    -- ^ TODO similar to comment above ^ is rrAlias always a derivative of rrField?
     , rrAliasIndex    :: !Int
     , rrPhantomFields :: ![Text]
     }
@@ -155,17 +85,13 @@ newtype ArrayIndex =
 -- point back to them.
 rebuildFieldStrippingRemoteRels ::
      VQ.Field -> Maybe (VQ.Field, NonEmpty RemoteRelField)
--- TODO consider passing just relevant fields (_fSelSet and _fAlias?) from Field here and modify Field in caller
 rebuildFieldStrippingRemoteRels =
-  extract . flip runState mempty . rebuild 0 mempty
+  traverse NE.nonEmpty . flip runState mempty . rebuild 0 mempty
   where
-    extract (field, remoteRelFields) =
-      fmap (field, ) (NE.nonEmpty remoteRelFields)
-    -- TODO refactor for clarity
     rebuild idx0 parentPath field0 = do
       selSetEithers <-
-        traverse
-          (\(idx, subfield) ->
+        for (zip [0..] (toList (_fSelSet field0))) $
+          \(idx, subfield) ->
              case _fRemoteRel subfield of
                Nothing -> fmap Right (rebuild idx thisPath subfield)
                Just remoteField -> do
@@ -174,7 +100,8 @@ rebuildFieldStrippingRemoteRels =
                  where remoteRelField =
                          RemoteRelField
                            { rrRemoteField = remoteField
-                           , rrField = subfield
+                           , rrArguments = _fArguments subfield
+                           , rrSelSet = _fSelSet subfield
                            , rrRelFieldPath = thisPath
                            , rrAlias = _fAlias subfield
                            , rrAliasIndex = idx
@@ -182,25 +109,16 @@ rebuildFieldStrippingRemoteRels =
                                map
                                  G.unName
                                  (filter
-                                    (\name ->
-                                       notElem
-                                         name
-                                         (map _fName (toList (_fSelSet field0))))
-                                    (map
-                                       (G.Name . getFieldNameTxt)
-                                       (toList
-                                          (rtrHasuraFields
-                                             (rmfRemoteRelationship remoteField)))))
-                           })
-          (zip [0..] (toList (_fSelSet field0)))
+                                    (`notElem` fmap _fName (_fSelSet field0))
+                                    (hasuraFieldNames remoteField))
+                           }
       let fields = rights selSetEithers
       pure
         field0
           { _fSelSet =
               Seq.fromList $
                 selSetEithers >>= \case
-                  Right field -> pure field
-                    where _ = _fAlias field
+                  Right field -> [field]
                   Left remoteField ->
                     mapMaybe
                       (\name ->
@@ -216,14 +134,12 @@ rebuildFieldStrippingRemoteRels =
                                      , _fSelSet = mempty
                                      , _fRemoteRel = Nothing
                                      }))
-                      (map
-                         (G.Name . getFieldNameTxt)
-                         (toList
-                            (rtrHasuraFields
-                               (rmfRemoteRelationship remoteField))))
+                      (hasuraFieldNames remoteField)
           }
       where
         thisPath = parentPath <> RelFieldPath (pure (idx0, _fAlias field0))
+        hasuraFieldNames = 
+          map (G.Name . getFieldNameTxt) . toList . rtrHasuraFields . rmfRemoteRelationship
 
 -- | Get a list of fields needed from a hasura result.
 neededHasuraFields
@@ -236,6 +152,7 @@ joinResults :: GQRespValue
             -> GQRespValue
 joinResults hasuraValue0 =
   foldl' (uncurry . insertBatchResults) hasuraValue0 . map (fmap jsonToGQRespVal)
+  
   where
     jsonToGQRespVal = either mkErr id . parseGQRespValue
     mkErr = appendJoinError emptyResp . ("joinResults: eitherDecode: " <>) . fromString
@@ -243,6 +160,7 @@ joinResults hasuraValue0 =
 emptyResp :: GQRespValue
 emptyResp = GQRespValue OJ.empty VB.empty
 
+-- TODO it's not clear which error conditions here represent internal errors (i.e. bugs)...
 -- | Insert at path, index the value in the larger structure.
 insertBatchResults ::
      GQRespValue
@@ -268,7 +186,6 @@ insertBatchResults accumResp Batch{..} remoteResp =
     -- Since remote results are aliased by keys of the form 'remote_result_1', 'remote_result_2',
     -- we can sort by the keys for a ordered list
     -- On error, we short-circuit
-    -- TODO look again at this...
     remoteDataE = let indexedRemotes = map getIdxRemote $ OJ.toList $ _gqRespData remoteResp
                   in case any isNothing indexedRemotes of
                        True -> Left "couldn't parse all remote results"
@@ -400,17 +317,6 @@ peelOffNestedFields topNames topValue = foldM peel topValue (NE.drop 1 topNames)
             "No " <> show key <> " in " <> show value <> " from " <> 
             show topValue <> " with " <> show topNames
 
--- | Produce the set of remote relationship batch requests.
-produceBatches ::
-     G.OperationType
-  -> [( RemoteRelField
-    , RemoteSchemaInfo
-    , BatchInputs)]
-  -> [Batch]
-produceBatches opType =
-  fmap
-    (\(remoteRelField, remoteSchemaInfo, rows) ->
-       produceBatch opType remoteSchemaInfo remoteRelField rows)
 
 -- TODO document all of this
 data Batch =
@@ -446,9 +352,9 @@ produceBatch rtqOperationType rtqRemoteSchemaInfo RemoteRelField{..} batchInputs
     rtqFields =
       flip map indexedRows $ \(i, variables) ->
          fieldCallsToField
-           (_fArguments rrField)
+           rrArguments
            variables
-           (_fSelSet rrField)
+           rrSelSet
            (Just (arrayIndexAlias i))
            (rtrRemoteFields remoteRelationship)
     indexedRows = zip (map ArrayIndex [0 :: Int ..]) $ toList $ biRows batchInputs
@@ -662,7 +568,6 @@ extractFromResult cardinality keyedRemotes value =
                 (BatchInputs {biRows = pure (Map.fromList (toList row))
                              ,biCardinality = cardinality})))
         (Map.toList remotesRows)
-    -- TODO is there actually an invariant to be checked here?
     _ -> pure ()
   where
     candidates ::
@@ -816,4 +721,4 @@ pgcolvalueToGValue colVal = case colVal of
 
 appendJoinError :: GQRespValue -> GQJoinError -> GQRespValue
 appendJoinError resp err = 
-  gqRespErrors <>~ (VB.singleton $ gQJoinErrorToValue err) $ resp
+  gqRespErrors <>~ (VB.singleton $ gqJoinErrorToValue err) $ resp
