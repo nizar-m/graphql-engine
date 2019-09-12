@@ -5,14 +5,14 @@ response:
   data:
     profiles:
       - id: 1
-        name: alice
-        userScalar: alice
+        name: Jane
+        userScalar: Jane-the-great
       - id: 2
-        name: bob
-        userScalar: bob
+        name: John
+        userScalar: John-the-stunner
       - id: 3
-        name: alice
-        userScalar: alice
+        name: Joe
+        userScalar: Awesome-joe
 query:
   query: |
     query {

@@ -3,21 +3,23 @@ url: /v1/graphql
 status: 200
 response:
   data:
-    profiles_by_pk:
-      id: 1
-    messages:
-      - id: 1
-        msg: You win!
+    profiles:
+    - id: 2
+      alias: john-the-stunner
+    message:
+      id: 2
+      msg: You lose!
 query:
   query: |
     query ($id: Int!) {
-      profiles_by_pk(id: $id) {
+      profiles(where: { id: {_eq: $id} } ) {
         id
+        alias
       }
-      messages(where: { id: { eq: $id }}) {
+      message(id: $id) {
         id
         msg
       }
     }
   variables:
-    id: 1
+    id: 2

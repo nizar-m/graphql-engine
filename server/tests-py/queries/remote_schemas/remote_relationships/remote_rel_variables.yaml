@@ -5,25 +5,23 @@ response:
   data:
     profiles:
       - id: 1
-        messagesNestedArgs:
-          - id: 1
-            msg: You win!
+        usersNestedArgs: []
       - id: 2
-        messagesNestedArgs: []
+        usersNestedArgs:
+          - id: 2
+            provider: provider2
       - id: 3
-        messagesNestedArgs:
-          - id: 3
-            msg: Another alice
+        usersNestedArgs: []
 query:
   query: |
-    query ($name: String!) {
+    query ($provider: String!) {
       profiles {
         id
-        messagesNestedArgs(includes: { name:  [$name] }) {
+        usersNestedArgs(where: { provider: { _in: [$provider] }}) {
           id
-          msg
+          provider
         }
       }
     }
   variables:
-    name: alice
+    provider: provider2

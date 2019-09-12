@@ -8,6 +8,7 @@ import jsondiff
 import jwt
 import random
 import time
+import re
 
 from context import GQLWsClient
 
@@ -241,11 +242,23 @@ def validate_http_anyq(hge_ctx, url, query, headers, exp_code, exp_response):
         })
     return resp
 
+path_matcher = re.compile(r'\$\{([^}^{]+)\}')
+
+def path_constructor(loader, node):
+  ''' Extract the matched value, expand env variable, and replace the match '''
+  value = node.value
+  match = path_matcher.match(value)
+  env_var = match.group()[2:-1]
+  return os.environ[env_var] + value[match.end():]
+
 def check_query_f(hge_ctx, f, transport='http', add_auth=True):
     print("Test file: " + f)
     hge_ctx.may_skip_test_teardown = False
     print ("transport="+transport)
     with open(f) as c:
+        # The resolver and constructor defined below replaces the occurrence of ${ENV} in yaml with the value of the environmental variable ENV
+        yaml.add_implicit_resolver('!env', path_matcher, None, yaml.SafeLoader)
+        yaml.add_constructor('!env', path_constructor, yaml.SafeLoader)
         conf = yaml.safe_load(c)
         if isinstance(conf, list):
             for sconf in conf:

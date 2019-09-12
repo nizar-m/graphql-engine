@@ -5,21 +5,29 @@ response:
   data:
     profiles:
       - id: 1
-        messageBasic:
-          name: alice
+        alias: jane-the-great
+        userBasic:
+          id: 1
+          username: jane
       - id: 2
-        messageBasic:
-          name: bob
+        alias: john-the-stunner
+        userBasic:
+          id: 2 
+          username: john
       - id: 3
-        messageBasic:
-          name: alice
+        alias: awesome-joe
+        userBasic:
+          id: 3
+          username: joe
 query:
   query: |
     query {
       profiles {
         id
-        messageBasic {
-          name
+        alias
+        userBasic {
+          id
+          username
         }
       }
     }

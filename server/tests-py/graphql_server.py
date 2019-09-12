@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 
 from http import HTTPStatus
+import gql_prefixer_proxy
+import os
+import graphql
 
 import graphene
 
@@ -10,10 +13,29 @@ from webserver import RequestHandler, WebServer, MkHandlers, Response
 
 from enum import Enum
 
+def to_dict(res):
+    out = dict()
+    if res.data:
+        out['data'] = res.data
+    if res.errors:
+        out['errors'] = list(map(graphql.format_error, res.errors))
+    return out
+
 def mkJSONResp(graphql_result):
-    return Response(HTTPStatus.OK, graphql_result.to_dict(),
+    return Response(HTTPStatus.OK, to_dict(graphql_result),
                     {'Content-Type': 'application/json'})
 
+def MkGraphQLHandler(gql_schema):
+    class GraphQLHandler(RequestHandler):
+        def get(self, request):
+            return Response(HTTPStatus.METHOD_NOT_ALLOWED)
+
+        def post(self, request):
+            if not request.json:
+                return Response(HTTPStatus.BAD_REQUEST)
+            res = gql_schema.execute(request.json['query'])
+            return mkJSONResp(res)
+    return GraphQLHandler
 
 class HelloWorldHandler(RequestHandler):
     def get(self, request):
@@ -29,20 +51,12 @@ class Hello(graphene.ObjectType):
         return "Hello " + arg
 
 hello_schema = graphene.Schema(query=Hello, subscription=Hello)
-
-class HelloGraphQL(RequestHandler):
-    def get(self, request):
-        return Response(HTTPStatus.METHOD_NOT_ALLOWED)
-
-    def post(self, request):
-        if not request.json:
-            return Response(HTTPStatus.BAD_REQUEST)
-        res = hello_schema.execute(request.json['query'])
-        return mkJSONResp(res)
+HelloGraphQL= MkGraphQLHandler(hello_schema)
 
 class User(graphene.ObjectType):
     id = graphene.Int()
     username = graphene.String()
+    capitalize = graphene.String(name=graphene.String(required=False))
     def __init__(self, id, username):
         self.id = id
         self.username = username
@@ -53,11 +67,20 @@ class User(graphene.ObjectType):
     def resolve_username(self, info):
         return self.username
 
+    def resolve_capitalize(self, info, name):
+        if name:
+            return name.capitalize()
+        else:
+            return self.username.capitalize()
+
     @staticmethod
-    def get_by_id(_id):
+    def get_by_id(_id, throw_error):
         xs = list(filter(lambda u: u.id == _id, all_users))
         if not xs:
-            return None
+            if throw_error:
+                raise graphql.GraphQLError("Could not find user with id: " + str(_id))
+            else:
+                return None
         return xs[0]
 
 all_users = [
@@ -79,28 +102,36 @@ class CreateUser(graphene.Mutation):
         all_users.append(user)
         return CreateUser(ok=True, user=user)
 
+class DeleteUser(graphene.Mutation):
+    class Arguments:
+        id = graphene.Int(required=True)
+
+    user = graphene.Field(lambda: User)
+
+    def mutate(self, info, id):
+        user = User.get_by_id(id, True)
+        all_users.remove(user)
+        return DeleteUser(user=user)
+
 class UserQuery(graphene.ObjectType):
-    user = graphene.Field(User, id=graphene.Int(required=True))
+    user = graphene.Field(
+        User,
+        id=graphene.Int(required=True),
+        throw_error=graphene.Boolean(default_value=False) )
     allUsers = graphene.List(User)
 
-    def resolve_user(self, info, id):
-        return User.get_by_id(id)
+    def resolve_user(self, info, id, throw_error):
+        return User.get_by_id(id, throw_error)
 
     def resolve_allUsers(self, info):
-        return all_users
+        return sorted(all_users, key = lambda x: x.id)
 
 class UserMutation(graphene.ObjectType):
     createUser = CreateUser.Field()
-user_schema = graphene.Schema(query=UserQuery, mutation=UserMutation)
+    deleteUser = DeleteUser.Field()
 
-class UserGraphQL(RequestHandler):
-    def get(self, req):
-        return Response(HTTPStatus.METHOD_NOT_ALLOWED)
-    def post(self, req):
-        if not req.json:
-            return Response(HTTPStatus.BAD_REQUEST)
-        res = user_schema.execute(req.json['query'])
-        return mkJSONResp(res)
+user_schema = graphene.Schema(query=UserQuery, mutation=UserMutation)
+UserGraphQL = MkGraphQLHandler(user_schema)
 
 class timestamptz(graphene.types.Scalar):
     @staticmethod
@@ -129,16 +160,7 @@ class CountryQuery(graphene.ObjectType):
         return Country("India")
 
 country_schema = graphene.Schema(query=CountryQuery)
-
-class CountryGraphQL(RequestHandler):
-    def get(self, req):
-        return Response(HTTPStatus.METHOD_NOT_ALLOWED)
-    def post(self, req):
-        if not req.json:
-            return Response(HTTPStatus.BAD_REQUEST)
-        res = country_schema.execute(req.json['query'])
-        return mkJSONResp(res)
-
+CountryGraphQL = MkGraphQLHandler(country_schema)
 
 class person(graphene.ObjectType):
     id = graphene.Int(required=True)
@@ -159,15 +181,7 @@ class PersonQuery(graphene.ObjectType):
         return person()
 
 person_schema = graphene.Schema(query=PersonQuery)
-
-class PersonGraphQL(RequestHandler):
-    def get(self, req):
-        return Response(HTTPStatus.METHOD_NOT_ALLOWED)
-    def post(self, req):
-        if not req.json:
-            return Response(HTTPStatus.BAD_REQUEST)
-        res = person_schema.execute(req.json['query'])
-        return mkJSONResp(res)
+PersonGraphQL = MkGraphQLHandler(person_schema)
 
 # GraphQL server that returns Set-Cookie response header
 class SampleAuth(graphene.ObjectType):
@@ -267,15 +281,7 @@ class CharacterIFaceQuery(graphene.ObjectType):
 schema = graphene.Schema(query=CharacterIFaceQuery, types=[Human, Droid])
 
 character_interface_schema = graphene.Schema(query=CharacterIFaceQuery, types=[Human, Droid])
-
-class CharacterInterfaceGraphQL(RequestHandler):
-    def get(self, req):
-        return Response(HTTPStatus.METHOD_NOT_ALLOWED)
-    def post(self, req):
-        if not req.json:
-            return Response(HTTPStatus.BAD_REQUEST)
-        res = character_interface_schema.execute(req.json['query'])
-        return mkJSONResp(res)
+CharacterInterfaceGraphQL = MkGraphQLHandler(person_schema)
 
 class InterfaceGraphQLErrEmptyFieldList(RequestHandler):
     def get(self, req):
@@ -284,7 +290,7 @@ class InterfaceGraphQLErrEmptyFieldList(RequestHandler):
         if not req.json:
             return Response(HTTPStatus.BAD_REQUEST)
         res = character_interface_schema.execute(req.json['query'])
-        respDict = res.to_dict()
+        respDict = to_dict(res)
         typesList = respDict.get('data',{}).get('__schema',{}).get('types',None)
         if typesList is not None:
             for t in typesList:
@@ -300,7 +306,7 @@ class InterfaceGraphQLErrUnknownInterface(RequestHandler):
         if not req.json:
             return Response(HTTPStatus.BAD_REQUEST)
         res = character_interface_schema.execute(req.json['query'])
-        respDict = res.to_dict()
+        respDict = to_dict(res)
         typesList = respDict.get('data',{}).get('__schema',{}).get('types',None)
         if typesList is not None:
             for t in typesList:
@@ -316,7 +322,7 @@ class InterfaceGraphQLErrWrongFieldType(RequestHandler):
         if not req.json:
             return Response(HTTPStatus.BAD_REQUEST)
         res = character_interface_schema.execute(req.json['query'])
-        respDict = res.to_dict()
+        respDict = to_dict(res)
         typesList = respDict.get('data',{}).get('__schema',{}).get('types',None)
         if typesList is not None:
             for t in typesList:
@@ -335,7 +341,7 @@ class InterfaceGraphQLErrMissingField(RequestHandler):
         if not req.json:
             return Response(HTTPStatus.BAD_REQUEST)
         res = character_interface_schema.execute(req.json['query'])
-        respDict = res.to_dict()
+        respDict = to_dict(res)
         typesList = respDict.get('data',{}).get('__schema',{}).get('types',None)
         if typesList is not None:
             for t in typesList:
@@ -368,7 +374,7 @@ class InterfaceGraphQLErrMissingArg(RequestHandler):
         if not req.json:
             return Response(HTTPStatus.BAD_REQUEST)
         res = character_interface_schema.execute(req.json['query'])
-        respDict = res.to_dict()
+        respDict = to_dict(res)
         typesList = respDict.get('data',{}).get('__schema',{}).get('types',None)
         if typesList is not None:
             for t in typesList:
@@ -386,7 +392,7 @@ class InterfaceGraphQLErrWrongArgType(RequestHandler):
         if not req.json:
             return Response(HTTPStatus.BAD_REQUEST)
         res = character_interface_schema.execute(req.json['query'])
-        respDict = res.to_dict()
+        respDict = to_dict(res)
         objArg = copy.deepcopy(ifaceArg)
         objArg['type']['ofType']['name'] = 'String'
 
@@ -410,7 +416,7 @@ class InterfaceGraphQLErrExtraNonNullArg(RequestHandler):
         if not req.json:
             return Response(HTTPStatus.BAD_REQUEST)
         res = character_interface_schema.execute(req.json['query'])
-        respDict = res.to_dict()
+        respDict = to_dict(res)
         typesList = respDict.get('data',{}).get('__schema',{}).get('types',None)
         if typesList is not None:
             for t in typesList:
@@ -447,15 +453,7 @@ class UnionQuery(graphene.ObjectType):
         return character_search_results.get(episode)
 
 union_schema = graphene.Schema(query=UnionQuery, types=[Human, Droid])
-
-class UnionGraphQL(RequestHandler):
-    def get(self, req):
-        return Response(HTTPStatus.METHOD_NOT_ALLOWED)
-    def post(self, req):
-        if not req.json:
-            return Response(HTTPStatus.BAD_REQUEST)
-        res = union_schema.execute(req.json['query'])
-        return mkJSONResp(res)
+UnionGraphQL = MkGraphQLHandler(union_schema)
 
 class UnionGraphQLSchemaErrUnknownTypes(RequestHandler):
     def get(self, req):
@@ -464,7 +462,7 @@ class UnionGraphQLSchemaErrUnknownTypes(RequestHandler):
         if not req.json:
             return Response(HTTPStatus.BAD_REQUEST)
         res = union_schema.execute(req.json['query'])
-        respDict = res.to_dict()
+        respDict = to_dict(res)
         typesList = respDict.get('data',{}).get('__schema',{}).get('types',None)
         if typesList is not None:
             for t in typesList:
@@ -481,7 +479,7 @@ class UnionGraphQLSchemaErrSubTypeInterface(RequestHandler):
         if not req.json:
             return Response(HTTPStatus.BAD_REQUEST)
         res = union_schema.execute(req.json['query'])
-        respDict = res.to_dict()
+        respDict = to_dict(res)
         typesList = respDict.get('data',{}).get('__schema',{}).get('types',None)
         if typesList is not None:
             for t in typesList:
@@ -498,7 +496,7 @@ class UnionGraphQLSchemaErrNoMemberTypes(RequestHandler):
         if not req.json:
             return Response(HTTPStatus.BAD_REQUEST)
         res = union_schema.execute(req.json['query'])
-        respDict = res.to_dict()
+        respDict = to_dict(res)
         typesList = respDict.get('data',{}).get('__schema',{}).get('types',None)
         if typesList is not None:
             for t in typesList:
@@ -514,7 +512,7 @@ class UnionGraphQLSchemaErrWrappedType(RequestHandler):
         if not req.json:
             return Response(HTTPStatus.BAD_REQUEST)
         res = union_schema.execute(req.json['query'])
-        respDict = res.to_dict()
+        respDict = to_dict(res)
         typesList = respDict.get('data',{}).get('__schema',{}).get('types',None)
         if typesList is not None:
             for t in typesList:
@@ -590,7 +588,7 @@ class EchoGraphQL(RequestHandler):
         if not req.json:
             return Response(HTTPStatus.BAD_REQUEST)
         res = echo_schema.execute(req.json['query'])
-        resp_dict = res.to_dict()
+        resp_dict = to_dict(res)
         types_list = resp_dict.get('data',{}).get('__schema',{}).get('types', None)
         #Hack around enum default_value serialization issue: https://github.com/graphql-python/graphql-core/issues/166
         if types_list is not None:
@@ -657,59 +655,77 @@ all_messages = [
 
 class MessagesQuery(graphene.ObjectType):
     message = graphene.Field(Message, id=graphene.Int(required=True))
-    messages = graphene.List(Message)
+    allMessages = graphene.List(Message)
 
     def resolve_message(self, info, id):
         return Message.get_by_id(id)
 
-    def resolve_messages(self, info):
+    def resolve_allMessages(self, info):
         return all_messages
 
 messages_schema = graphene.Schema(query=MessagesQuery)
+MessagesGraphQL = MkGraphQLHandler(messages_schema)
 
-class MessagesGraphQL(RequestHandler):
-    def get(self, request):
-        return Response(HTTPStatus.METHOD_NOT_ALLOWED)
+class Error(graphene.ObjectType):
+  nullMessage = graphene.String()
 
-    def post(self, request):
-        if not request.json:
-            return Response(HTTPStatus.BAD_REQUEST)
-        res = messages_schema.execute(request.json['query'])
-        return mkJSONResp(res)
+  def resolve_nullMessage(self, info):
+      raise graphql.GraphQLError("Intentional error on the field nullMessage")
 
-handlers = MkHandlers({
-    '/hello': HelloWorldHandler,
-    '/hello-graphql': HelloGraphQL,
-    '/user-graphql': UserGraphQL,
-    '/country-graphql': CountryGraphQL,
-    '/character-iface-graphql' : CharacterInterfaceGraphQL,
-    '/iface-graphql-err-empty-field-list' : InterfaceGraphQLErrEmptyFieldList,
-    '/iface-graphql-err-unknown-iface' : InterfaceGraphQLErrUnknownInterface,
-    '/iface-graphql-err-missing-field' : InterfaceGraphQLErrMissingField,
-    '/iface-graphql-err-wrong-field-type' : InterfaceGraphQLErrWrongFieldType,
-    '/iface-graphql-err-missing-arg' : InterfaceGraphQLErrMissingArg,
-    '/iface-graphql-err-wrong-arg-type' : InterfaceGraphQLErrWrongArgType,
-    '/iface-graphql-err-extra-non-null-arg' : InterfaceGraphQLErrExtraNonNullArg,
-    '/union-graphql' : UnionGraphQL,
-    '/union-graphql-err-unknown-types' : UnionGraphQLSchemaErrUnknownTypes,
-    '/union-graphql-err-subtype-iface' : UnionGraphQLSchemaErrSubTypeInterface,
-    '/union-graphql-err-no-member-types' : UnionGraphQLSchemaErrNoMemberTypes,
-    '/union-graphql-err-wrapped-type' : UnionGraphQLSchemaErrWrappedType,
-    '/default-value-echo-graphql' : EchoGraphQL,
-    '/person-graphql': PersonGraphQL,
-    '/header-graphql': HeaderTestGraphQL,
-    '/messages-graphql' : MessagesGraphQL,
-    '/auth-graphql': SampleAuthGraphQL
-})
+class ErrorQuery(graphene.ObjectType):
+    objErr = graphene.Field(Error)
+    arrErr = graphene.List(Error)
+
+    def resolve_objErr(self, info):
+        return Error()
+
+    def resolve_arrErr(self, info):
+        return [Error()]
+
+error_schema = graphene.Schema(query=ErrorQuery)
+errorGraphQL = MkGraphQLHandler(error_schema)
+
+def handlers(hge_url, hge_key=None):
+    hge_headers = {}
+    if hge_key:
+        hge_headers = {'x-hasura-admin-secret': hge_key}
+    return MkHandlers({
+        '/hello': HelloWorldHandler,
+        '/hello-graphql': HelloGraphQL,
+        '/user-graphql': UserGraphQL,
+        '/country-graphql': CountryGraphQL,
+        '/character-iface-graphql' : CharacterInterfaceGraphQL,
+        '/iface-graphql-err-empty-field-list' : InterfaceGraphQLErrEmptyFieldList,
+        '/iface-graphql-err-unknown-iface' : InterfaceGraphQLErrUnknownInterface,
+        '/iface-graphql-err-missing-field' : InterfaceGraphQLErrMissingField,
+        '/iface-graphql-err-wrong-field-type' : InterfaceGraphQLErrWrongFieldType,
+        '/iface-graphql-err-missing-arg' : InterfaceGraphQLErrMissingArg,
+        '/iface-graphql-err-wrong-arg-type' : InterfaceGraphQLErrWrongArgType,
+        '/iface-graphql-err-extra-non-null-arg' : InterfaceGraphQLErrExtraNonNullArg,
+        '/union-graphql' : UnionGraphQL,
+        '/union-graphql-err-unknown-types' : UnionGraphQLSchemaErrUnknownTypes,
+        '/union-graphql-err-subtype-iface' : UnionGraphQLSchemaErrSubTypeInterface,
+        '/union-graphql-err-no-member-types' : UnionGraphQLSchemaErrNoMemberTypes,
+        '/union-graphql-err-wrapped-type' : UnionGraphQLSchemaErrWrappedType,
+        '/default-value-echo-graphql' : EchoGraphQL,
+        '/person-graphql': PersonGraphQL,
+        '/header-graphql': HeaderTestGraphQL,
+        '/messages-graphql' : MessagesGraphQL,
+        '/auth-graphql': SampleAuthGraphQL,
+        '/error-graphql': errorGraphQL,
+        '/graphql-prefixer-proxy': gql_prefixer_proxy.MkGQLPrefixerProxy(hge_url, hge_headers)
+    })
 
 
-def create_server(host='127.0.0.1', port=5000):
-    return WebServer((host, port), handlers)
+def create_server(hge_url, hge_key=None, host='127.0.0.1', port=5000):
+    return WebServer((host, port), handlers(hge_url, hge_key))
 
 def stop_server(server):
     server.shutdown()
     server.server_close()
 
 if __name__ == '__main__':
-    s = create_server(host='0.0.0.0')
-    s.serve_forever()
+    hge_url = os.environ['HGE_URL']
+    hge_key = os.environ.get('HASURA_GRAPHQL_ADMIN_SECRET')
+    assert hge_key
+    create_server(hge_url, hge_key).serve_forever()

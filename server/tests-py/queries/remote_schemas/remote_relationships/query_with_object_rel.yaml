@@ -5,17 +5,15 @@ response:
   data:
     profiles_by_pk:
       id: 1
-      name: alice
-      messageBasic:
-        msg: You win!
+      userBasic:
+        username: jane
 query:
   query: |
     query {
       profiles_by_pk(id: 1) {
         id
-        name
-        messageBasic {
-          msg
+        userBasic {
+          username
         }
       }
     }

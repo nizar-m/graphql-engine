@@ -1,19 +1,18 @@
 type: create_remote_relationship
 args:
-  name: userNestedFields
-  table: profiles
+  name: authorsNestedMessages
+  table: authors
   hasura_fields:
-    - id
-    - name
-  remote_schema: my-remote-schema
+    - user_id
+  remote_schema: prefixer-proxy
   remote_field:
-    user:
+    prefixer_proxy_profiles_by_pk:
       arguments:
-        user_id: $id
+        id : $user_id
       field:
-        userMessages:
+        messages:
           arguments:
-            whered:
-              name:
-                eq: $name
-
+            limit: 10
+            where:
+              profile_id:
+                _eq: $user_id

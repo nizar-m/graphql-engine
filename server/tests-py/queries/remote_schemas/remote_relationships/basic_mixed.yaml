@@ -3,25 +3,26 @@ url: /v1/graphql
 status: 200
 response:
   data:
-    profiles:
+    table:
       - id: 1
       - id: 2
       - id: 3
-    messages:
+    remote:
       - id: 1
         msg: You win!
       - id: 2
         msg: You lose!
-      - id: 3
-        msg: Another alice
 query:
   query: |
     query {
-      profiles {
+
+      table: profiles {
         id
       }
-      messages {
+
+      remote: allMessages {
         id
         msg
       }
+
     }

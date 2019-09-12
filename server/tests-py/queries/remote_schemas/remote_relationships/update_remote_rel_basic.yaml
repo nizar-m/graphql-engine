@@ -1,13 +1,11 @@
 type: update_remote_relationship
 args:
-  name: messageBasic
+  name: userBasic
   table: profiles
   hasura_fields:
     - id
-  remote_schema: my-remote-schema
+  remote_schema: prefixer-proxy
   remote_field:
-    messages:
+    prefixer_proxy_users_by_pk:
       arguments:
-        where:
-          id:
-            eq: "$id"
+        id: "$id"

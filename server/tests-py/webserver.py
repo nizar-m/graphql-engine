@@ -107,7 +107,7 @@ def MkHandlers(handlers):
                 self.send_header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS')
                 self.end_headers()
                 self.wfile.write(resp.get_body().encode('utf-8'))
-            except KeyError:
+            except KeyError as e:
                 self.not_found()
 
         def do_OPTIONS(self):

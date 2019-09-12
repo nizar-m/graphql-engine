@@ -1,42 +1,108 @@
 type: bulk
 args:
 
-# To model this:
-
-# query {
-#   profiles {
-#     id
-#     message {
-#       id
-#       msg
-#     }
-#   }
-# }
-
-#Profile table
 - type: run_sql
   args:
     sql: |
-      create table profiles (
+      create table users (
           id serial primary key,
-          name text
+          provider text not null
       );
-- type: run_sql
+
+      create table profiles (
+          id integer primary key references users(id),
+          name text not null,
+          alias text not null unique
+      );
+
+      create table messages (
+          id serial primary key,
+          profile_id integer not null references profiles(id),
+          message text
+      );
+
+      create table authors (
+          id serial primary key,
+          alias text unique not null references profiles(alias),
+          user_id integer not null references users(id),
+          biography text
+      );
+
+      create table articles (
+          id serial primary key,
+          author_id integer not null references authors(id)
+      );
+- type: track_table
   args:
-    sql: |
-      insert into profiles (name) values
-      ( 'alice' ),
-      ( 'bob' ),
-      ( 'alice')
+    schema: public
+    name: users
 - type: track_table
   args:
     schema: public
     name: profiles
-
-- type: add_remote_schema
+- type: track_table
   args:
-    name: my-remote-schema
-    definition:
-      url: http://localhost:4000
-      forward_client_headers: false
+    schema: public
+    name: messages
+- type: track_table
+  args:
+    schema: public
+    name: authors
+- type: track_table
+  args:
+    schema: public
+    name: articles
+#Object relationship
+- type: create_object_relationship
+  args:
+    table: articles
+    name: author
+    using:
+      foreign_key_constraint_on: author_id
+- type: create_object_relationship
+  args:
+    table: authors
+    name: user
+    using:
+      foreign_key_constraint_on: user_id
+- type: create_object_relationship
+  args:
+    table: messages
+    name: profile
+    using:
+      foreign_key_constraint_on: profile_id
+- type: create_object_relationship
+  args:
+    table: profiles
+    name: user
+    using:
+      foreign_key_constraint_on: id
+#Array relationships
+- type: create_array_relationship
+  args:
+    table: profiles
+    name: messages
+    using:
+      foreign_key_constraint_on:
+        table: messages
+        column: profile_id
+- type: run_sql
+  args:
+    sql: |
+      insert into users (id, provider) values
+      (1,'provider1' ),
+      (2,'provider2'),
+      (3,'provider1');
 
+      insert into profiles (id, name, alias) values
+      (1, 'Jane', 'jane-the-great' ),
+      (2, 'John', 'john-the-stunner'),
+      (3, 'Joe', 'awesome-joe' );
+
+      insert into messages (profile_id, message) values
+      (1, '(from table) You win' ),
+      (2, '(from table) You lose');
+
+      insert into authors (alias, user_id, biography) values
+      ('jane-the-great', 1, 'Bio of Jane' ),
+      ('awesome-joe', 3, 'Bio of Joe');

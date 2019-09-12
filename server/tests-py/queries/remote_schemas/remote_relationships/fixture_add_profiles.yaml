@@ -1,0 +1,11 @@
+add: |
+  insert into users (id, provider) values 
+    (4, 'provider3'), 
+    (5, 'provider3');
+
+  insert into profiles (id, name, alias) values
+    (4, 'alice',   'magnificient-alice'),
+    (5, 'william', 'awe-inspiring-william');
+remove: |
+  delete from profiles where id in (4,5);
+  delete from users    where id in (4,5);

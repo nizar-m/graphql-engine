@@ -6,20 +6,67 @@ response:
     __type:
       name: profiles
       fields:
-      - args: []
-        name: id
-      - args: []
-        name: messageBasic
-      - args:
-        - name: includes
+      - name: alias
+        args: []
+      - name: id
+        args: []
+      - name: messages
+        args:
+        - name: distinct_on
           type:
-            name: IncludeInpObj
+            name: null
+        - name: limit
+          type:
+            name: Int
+        - name: offset
+          type:
+            name: Int
+        - name: order_by
+          type:
+            name: null
         - name: where
           type:
-            name: MessageWhereInpObj_remote_rel_public_profilesmessagesNestedArgs
-        name: messagesNestedArgs
-      - args: []
-        name: name
+            name: messages_bool_exp
+      - name: messages_aggregate
+        args:
+        - name: distinct_on
+          type:
+            name: null
+        - name: limit
+          type:
+            name: Int
+        - name: offset
+          type:
+            name: Int
+        - name: order_by
+          type:
+            name: null
+        - name: where
+          type:
+            name: messages_bool_exp
+      - name: name
+        args: []
+      - name: nestedArgs
+        args:
+        - name: distinct_on
+          type:
+            name: null
+        - name: limit
+          type:
+            name: Int
+        - name: offset
+          type:
+            name: Int
+        - name: order_by
+          type:
+            name: null
+        - name: where
+          type:
+            name: users_bool_exp_remote_rel_public_profilesnestedArgs
+      - name: user
+        args: []
+      - name: userBasic
+        args: []
 query:
   query: |
     query {

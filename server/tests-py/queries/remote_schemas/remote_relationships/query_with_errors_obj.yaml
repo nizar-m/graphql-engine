@@ -7,49 +7,38 @@ response:
   data:
     profiles:
       - id: 1
-        messageBasic:
-            msg: You win!
-            errorMsg: null
+        userBasic:
+            id: 1
+            username: jane
       - id: 2
-        messageBasic:
-            msg: You lose!
-            errorMsg: null
+        userBasic:
+            id: 2
+            username: john
       - id: 3
-        messageBasic:
-            msg: Another alice
-            errorMsg: null
+        userBasic:
+            id: 3
+            username: joe
+      - id: 4
+        userBasic: null
+      - id: 5
+        userBasic: null
   errors:
-  - locations:
-    - column: 57
-      line: 1
-    message: intentional-error
-    path:
-    - hasura_array_idx_0
-    - errorMsg
-  - locations:
-    - column: 126
-      line: 1
-    message: intentional-error
-    path:
-    - hasura_array_idx_1
-    - errorMsg
-  - locations:
-    - column: 195
-      line: 1
-    message: intentional-error
-    path:
-    - hasura_array_idx_2
-    - errorMsg
-
+    - locations:
+        - [1, 253]
+      message: 'Could not find user with id: 4'
+      path: [hasura_array_idx_3]
+    - locations:
+        - [1, 334]
+      message: 'Could not find user with id: 5'
+      path: [hasura_array_idx_4]
 query:
   query: |
     query {
       profiles {
         id
-        messageBasic {
-          msg
-          errorMsg
+        userBasic(throwError: true) {
+          id
+          username
         }
       }
-      
     }

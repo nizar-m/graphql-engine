@@ -4,14 +4,13 @@ args:
   table: profiles
   hasura_fields:
     - id
-    - name
-  remote_schema: my-remote-schema
+    - alias
+  remote_schema: user
   remote_field:
     user:
       arguments:
-        user_id: $id
+        id: $id
       field:
-        gimmeText:
+        capitalize:
           arguments:
-            text: $name
-
+            name: $alias

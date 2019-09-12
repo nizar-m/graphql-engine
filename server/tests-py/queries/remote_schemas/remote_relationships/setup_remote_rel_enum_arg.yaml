@@ -1,6 +1,6 @@
 type: create_remote_relationship
 args:
-  name: messagesMultipleFields
+  name: messagesAndBoolExp
   table: authors
   hasura_fields:
     - user_id
@@ -12,6 +12,5 @@ args:
         where:
           profile_id:
             _eq: $user_id
-          profile:
-            alias:
-              _eq: $alias
+        order_by:
+          id: asc

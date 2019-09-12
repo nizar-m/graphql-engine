@@ -3,27 +3,26 @@ url: /v1/graphql
 status: 200
 response:
   data:
-    profiles:
+    authors:
+    - id: 1
+      alias: jane-the-great
+      authorsNestedMessages:
       - id: 1
-        name: alice
-        userNestedFields:
-          - name: alice
-      - id: 2
-        name: bob
-        userNestedFields:
-          - name: bob
-      - id: 3
-        name: alice
-        userNestedFields:
-          - name: alice
+        profile_id: 1
+        message: (from table) You win
+    - id: 2
+      alias: awesome-joe
+      authorsNestedMessages: []
 query:
   query: |
     query {
-      profiles {
+      authors {
         id
-        name
-        userNestedFields {
-          name
+        alias
+        authorsNestedMessages {
+          id
+          profile_id
+          message
         }
       }
     }

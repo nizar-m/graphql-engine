@@ -3,27 +3,25 @@ url: /v1/graphql
 status: 200
 response:
   data:
-    profiles:
-      - id: 1
-        name: alice
-        messagesMultiFields:
-            - msg: You win!
-      - id: 2
-        name: bob
-        messagesMultiFields:
-          - msg: You lose!
-      - id: 3
-        name: alice
-        messagesMultiFields:
-          - msg: Another alice
+    authors:
+    - alias: jane-the-great
+      id: 1
+      messagesMultipleFields:
+      - message: (from table) You win
+      user_id: 1
+    - alias: awesome-joe
+      id: 2
+      messagesMultipleFields: []
+      user_id: 3
 query: 
   query: |
     query {
-      profiles {
+      authors {
         id
-        name
-        messagesMultiFields {
-          msg
+        alias
+        user_id
+        messagesMultipleFields {
+          message
         }
       }
     }

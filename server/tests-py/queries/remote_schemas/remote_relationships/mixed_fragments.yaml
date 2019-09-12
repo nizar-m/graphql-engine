@@ -5,26 +5,31 @@ response:
   data:
     profiles:
       - id: 1
+        alias: jane-the-great
       - id: 2
+        alias: john-the-stunner
       - id: 3
-    messages:
+        alias: awesome-joe
+    allMessages:
       - id: 1
         msg: You win!
       - id: 2
         msg: You lose!
-      - id: 3
-        msg: Another alice
 query:
   query: |
     fragment basicInfo on Message {
       id
       msg
     }
+
     query {
+
       profiles {
         id
+        alias
       }
-      messages {
+
+      allMessages {
         ...basicInfo
       }
     }

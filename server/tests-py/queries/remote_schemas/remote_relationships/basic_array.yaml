@@ -3,35 +3,22 @@ url: /v1/graphql
 status: 200
 response:
   data:
-    profiles:
+    messages:
       - id: 1
-        messagesNestedArr:
-          - name: alice
-            msg: You win!
-          - name: alice
-            msg: Another alice
-        name: alice
+        message: (from table) You win
+        usersNestedArr: []
       - id: 2
-        messagesNestedArr:
-          - name: bob
-            msg: You lose!
-        name: bob
-      - id: 3
-        messagesNestedArr:
-          - name: alice
-            msg: You win!
-          - name: alice
-            msg: Another alice
-        name: alice
+        message: (from table) You lose
+        usersNestedArr:
+          - provider: provider2
 query:
   query: |
     query {
-      profiles {
+      messages {
         id
-        name
-        messagesNestedArr {
-          name
-          msg
+        message
+        usersNestedArr(where : { provider: { _eq: "provider2" } } ){
+          provider
         }
       }
     }

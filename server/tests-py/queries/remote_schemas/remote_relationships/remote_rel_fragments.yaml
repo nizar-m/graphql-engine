@@ -3,31 +3,45 @@ url: /v1/graphql
 status: 200
 response:
   data:
+    allUsers:
+      - id: 1
+        username: jane
+      - id : 2
+        username: john
+      - id: 3
+        username: joe
     profiles:
       - id: 1
-        messageBasic:
+        alias: jane-the-great
+        userBasic:
           id: 1
-          name: alice
+          username: jane
       - id: 2
-        messageBasic:
+        alias: john-the-stunner
+        userBasic:
           id : 2
-          name: bob
+          username: john
       - id: 3
-        messageBasic:
+        alias: awesome-joe
+        userBasic:
           id: 3
-          name: alice
+          username: joe
 query:
   query: |
-    fragment basicInfo on Message {
+    fragment userInfo on User {
       id
-      name
+      username
     }
 
     query {
+      allUsers {
+        ...userInfo
+      }
       profiles {
         id
-        messageBasic {
-          ...basicInfo
+        alias
+        userBasic {
+          ...userInfo
         }
       }
     }

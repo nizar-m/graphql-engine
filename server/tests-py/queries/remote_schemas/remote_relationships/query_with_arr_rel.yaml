@@ -3,19 +3,19 @@ url: /v1/graphql
 status: 200
 response:
   data:
-    profiles_by_pk:
+    messages_by_pk:
       id: 1
-      name: alice
-      messagesNestedArgs:
-        - msg: You win!
+      message: (from table) You win
+      usersNestedArr:
+        - provider: provider1
 query:
   query: |
     query {
-      profiles_by_pk(id: 1) {
+      messages_by_pk(id: 1) {
         id
-        name
-        messagesNestedArgs {
-          msg
+        message
+        usersNestedArr {
+          provider
         }
       }
     }

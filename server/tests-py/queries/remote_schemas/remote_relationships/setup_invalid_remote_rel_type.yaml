@@ -1,12 +1,11 @@
 type: create_remote_relationship
 args:
-  name: message
+  name: invalideRemoteRelType
   table: profiles
   hasura_fields:
-    - id
-    - name
-  remote_schema: my-remote-schema
+  - id
+  remote_schema: user
   remote_field:
-    message:
+    user:
       arguments:
-        id: "$name"
+        id: $name
