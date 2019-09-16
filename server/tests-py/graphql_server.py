@@ -673,14 +673,14 @@ class Error(graphene.ObjectType):
       raise graphql.GraphQLError("Intentional error on the field nullMessage")
 
 class ErrorQuery(graphene.ObjectType):
-    objErr = graphene.Field(Error)
-    arrErr = graphene.List(Error)
+    objErr = graphene.Field(Error, ignored_id_arg=graphene.Int(required=False))
+    arrErr = graphene.List(Error, ignored_id_arg=graphene.Int(required=False))
 
-    def resolve_objErr(self, info):
+    def resolve_objErr(self, info, ignored_id_arg):
         return Error()
 
-    def resolve_arrErr(self, info):
-        return [Error()]
+    def resolve_arrErr(self, info, ignored_id_arg):
+        return [Error(), Error()]
 
 error_schema = graphene.Schema(query=ErrorQuery)
 errorGraphQL = MkGraphQLHandler(error_schema)
@@ -727,5 +727,4 @@ def stop_server(server):
 if __name__ == '__main__':
     hge_url = os.environ['HGE_URL']
     hge_key = os.environ.get('HASURA_GRAPHQL_ADMIN_SECRET')
-    assert hge_key
     create_server(hge_url, hge_key).serve_forever()

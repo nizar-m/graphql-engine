@@ -52,7 +52,13 @@ class GraphQLPrefixerProxy(RequestHandler):
       self.prefix = prefix
 
    def _is_non_def_obj_ty(self, ty):
-      return ty['kind'] == 'OBJECT' and not ty['name'].startswith('__')
+      return ty['kind'] in ['OBJECT'] and not ty['name'].startswith('__')
+
+   def _is_input_obj_ty(self, ty):
+      return ty['kind'] in ['INPUT_OBJECT']
+
+   def _is_enum(self, ty):
+      return ty['kind'] == 'ENUM'
 
    def _add_name_prefix(self, obj):
       assert not obj['name'].startswith(self.prefix), obj
@@ -62,61 +68,136 @@ class GraphQLPrefixerProxy(RequestHandler):
       return Response(HTTPStatus.METHOD_NOT_ALLOWED)
 
    def _assert_prefixes(self, introspect):
-      types = get_introspect_types(introspect)
-      if not types:
-         return
 
-      for ty in types:
-         if self._is_non_def_obj_ty(ty):
-            assert ty['name'].startswith(self.prefix), ty
-            for fld in ty['fields']:
-               base_ty = get_base_ty(fld)
-               if self._is_non_def_obj_ty(base_ty):
-                  assert base_ty['name'].startswith(self.prefix), fld
-               assert not base_ty['name'].startswith(self.prefix*2), fld
+      def assert_fld_name(fld):
+         return assert_ty_name(fld)
+
+      def assert_ty_name(ty):
+         assert ty['name'].startswith(self.prefix), ty
+         assert_no_loop(ty)
+
+      def assert_no_loop(ty):
          assert not ty['name'].startswith(self.prefix*2), ty
 
-      for oper_type in ['queryType', 'mutationType', 'subscriptionType']:
-         ty_name = json_get(introspect, ['data', '__schema', oper_type, 'name'])
-         if not ty_name:
-            continue
-         assert ty_name.startswith(self.prefix), ty_name
-         assert not ty_name.startswith(2*self.prefix), ty_name
-         ty = get_ty_by_name(types, ty_name)
-         if not ty:
-            continue
+      def assert_base_ty(elem):
+         base_ty = get_base_ty(elem)
+         assert_no_loop(base_ty), elem
+         return base_ty
 
-         for fld in ty['fields']:
-            assert fld['name'].startswith(self.prefix), fld
-            assert not fld['name'].startswith(2*self.prefix), fld
-
-
-
-   def _mod_types_introspect(self, introspect):
       types = get_introspect_types(introspect)
       if not types:
          return
-      # Add prefix to all non-default types
-      # If types start with the given prefix, remove them
-      # This would avoid cycles being created when this proxy is added as remote graphql to the original graphql server
+
+      for ty in types:
+         assert_no_loop(ty)
+         if self._is_non_def_obj_ty(ty):
+            # Ensure name of type starts with prefix
+            assert_ty_name(ty)
+
+            # Ensure base type of fields starts with prefix,
+            # if base type is object
+            for fld in ty['fields']:
+               base_ty = assert_base_ty(fld)
+               if self._is_non_def_obj_ty(base_ty):
+                  assert_ty_name(base_ty)
+               elif self._is_enum(ty):
+                  assert_ty_name(ty)
+
+               # Ensure base type of args starts with prefix,
+               # if base type is input_object
+               for arg in fld['args']:
+                  base_ty = assert_base_ty(arg)
+                  if self._is_input_obj_ty(base_ty):
+                     assert_ty_name(base_ty)
+                  elif self._is_enum(ty):
+                     assert_ty_name(ty)
+
+         elif self._is_input_obj_ty(ty):
+            # Ensure name of input object starts with prefix
+            assert_ty_name(ty)
+
+            for fld in ty['inputFields']:
+               base_ty = assert_base_ty(fld)
+               if self._is_input_obj_ty(base_ty):
+                  assert_ty_name(base_ty)
+
+         elif self._is_enum(ty):
+            assert_ty_name(ty)
+
+      for oper_type in ['queryType', 'mutationType', 'subscriptionType']:
+         ty = json_get(introspect, ['data', '__schema', oper_type])
+         if not ty:
+            continue
+         assert_ty_name(ty)
+         ty = get_ty_by_name(types, ty['name'])
+
+         for fld in ty['fields']:
+            assert_fld_name(fld)
+
+   def _mod_types_introspect(self, introspect):
+
+      def remove_if_base_ty_has_prefix(elems):
+         to_remove_elems = []
+         for elem in elems:
+            base_ty = get_base_ty(elem)
+            if base_ty['name'].startswith(self.prefix):
+               to_remove_elems.append(elem)
+         for elem in to_remove_elems:
+            elems.remove(elem)
+
+      def mod_fld_args(fld):
+         remove_if_base_ty_has_prefix(fld['args'])
+         for arg in fld['args']:
+            base_ty = get_base_ty(arg)
+            if self._is_input_obj_ty(base_ty):
+               self._add_name_prefix(base_ty)
+            elif self._is_enum(base_ty):
+               self._add_name_prefix(base_ty)
+
+      def mod_obj_fields(ty):
+         remove_if_base_ty_has_prefix(ty['fields'])
+         for fld in ty['fields']:
+            base_ty = get_base_ty(fld)
+            if self._is_non_def_obj_ty(base_ty):
+               self._add_name_prefix(base_ty)
+            elif self._is_enum(base_ty):
+               self._add_name_prefix(base_ty)
+            mod_fld_args(fld)
+
+      def mod_inp_obj_fields(ty):
+         remove_if_base_ty_has_prefix(ty['inputFields'])
+         for fld in ty['inputFields']:
+            base_ty = get_base_ty(fld)
+            if self._is_input_obj_ty(base_ty):
+               self._add_name_prefix(base_ty)
+            elif self._is_enum(base_ty):
+               self._add_name_prefix(base_ty)
+
+      def mod_object(ty):
+         self._add_name_prefix(ty)
+         mod_obj_fields(ty)
+
+      def mod_inp_obj(ty):
+         self._add_name_prefix(ty)
+         mod_inp_obj_fields(ty)
+
+      types = get_introspect_types(introspect)
+      if not types:
+         return
+
       to_remove_types=[]
       for ty in types:
-         if not self._is_non_def_obj_ty(ty):
-            continue
+         # If types from server start with the given prefix, remove them
+         # This would avoid cycles being created when this proxy
+         # is added as remote to the GraphQL server itself
          if ty['name'].startswith(self.prefix):
             to_remove_types.append(ty)
-         else:
+         elif self._is_non_def_obj_ty(ty):
+            mod_object(ty)
+         elif self._is_input_obj_ty(ty):
+            mod_inp_obj(ty)
+         elif self._is_enum(ty):
             self._add_name_prefix(ty)
-            # Add prefix to the types of fields as well
-            to_remove_flds = []
-            for fld in ty['fields']:
-               base_ty = get_base_ty(fld)
-               if base_ty['name'].startswith(self.prefix):
-                  to_remove_flds.append(fld)
-               elif self._is_non_def_obj_ty(base_ty):
-                  self._add_name_prefix(base_ty)
-            for fld in to_remove_flds:
-               ty['fields'].remove(fld)
 
       for ty in to_remove_types:
          types.remove(ty)
@@ -129,6 +210,16 @@ class GraphQLPrefixerProxy(RequestHandler):
 
    # With queries we need to strip prefix from top level fields (if present)
    def _query_mod_top_level_fields(self, req):
+
+      def set_alias_if_absent(fld):
+         if not fld.alias:
+            fld.alias = graphql.NameNode(value=fld.name.value)
+
+      def remove_prefix(fld):
+         fld.name.value = re.sub(
+            '^'+ re.escape(self.prefix), '',
+            top_fld.name.value )
+
       errors = []
       query = graphql.parse(req['query'], no_location=True)
       for oper in query.definitions:
@@ -136,10 +227,8 @@ class GraphQLPrefixerProxy(RequestHandler):
             continue
          for top_fld in oper.selection_set.selections:
             if top_fld.name.value.startswith(self.prefix):
-               if not top_fld.alias:
-                  top_fld.alias = graphql.NameNode(value=top_fld.name.value)
-               # Remove prefix
-               top_fld.name.value = re.sub('^'+ re.escape(self.prefix), '', top_fld.name.value)
+               set_alias_if_absent(top_fld)
+               remove_prefix(top_fld)
             elif top_fld.name.value not in ['__schema', '__type', '__typename' ]:
                errors.append('Unknown field ' + top_fld.name.value)
       req['query'] = graphql.print_ast(query)
@@ -152,42 +241,52 @@ class GraphQLPrefixerProxy(RequestHandler):
       if not types:
          return
 
+      def remove_fields_with_prefix(ty):
+         to_drop_fields = []
+         for fld in ty['fields']:
+            if fld['name'].startswith(self.prefix):
+               to_drop_fields.append(fld)
+         for fld in to_drop_fields:
+            ty['fields'].remove(fld)
+
       for oper_type in ['queryType', 'mutationType', 'subscriptionType']:
          ty_name = json_get(introspect, ['data', '__schema', oper_type, 'name'])
          if not ty_name:
             continue
          ty = get_ty_by_name(types, ty_name)
-         if not ty:
-            continue
-         to_drop_fields = []
+
+         remove_fields_with_prefix(ty)
          for fld in ty['fields']:
-            if fld['name'].startswith(self.prefix):
-               to_drop_fields.append(fld)
-            else:
-               self._add_name_prefix(fld)
-         for fld in to_drop_fields:
-            ty['fields'].remove(fld)
+            self._add_name_prefix(fld)
 
    def post(self, request):
       input_query = request.json.copy()
+
+      def log_if_input_query_changed():
+         if request.json.get('query') != input_query.get('query'):
+            print("Prefixer proxy: GrahpQL url:", self.gql_url)
+            print ("input query:", input_query)
+            print ("proxied query:", request.json)
+
+      def mod_introspect_output(json_out):
+         self._mod_top_level_fields_introspect(json_out)
+         self._mod_types_introspect(json_out)
+         self._assert_prefixes(json_out)
+
       if not request.json:
          return Response(HTTPStatus.BAD_REQUEST)
+
       errors = self._query_mod_top_level_fields(request.json)
       if errors:
          print('ERROR:',errors)
          json_out = {'errors': errors}
       else:
-         if request.json.get('query') != input_query.get('query'):
-            print ("input query:", input_query)
-            print ("proxied query:", request.json)
-         print("Prefixer proxy: GrahpQL url:", self.gql_url)
+         log_if_input_query_changed()
          resp = requests.post(self.gql_url, json.dumps(request.json), headers=self.headers)
          json_out = resp.json()
          if json_out.get('errors'):
             print('ERROR:', json_out['errors'])
-         self._mod_top_level_fields_introspect(json_out)
-         self._mod_types_introspect(json_out)
-         self._assert_prefixes(json_out)
+         mod_introspect_output(json_out)
       return Response(HTTPStatus.OK, json_out, {'Content-Type': 'application/json'})
 
 handlers = MkHandlers({ '/graphql': GraphQLPrefixerProxy })

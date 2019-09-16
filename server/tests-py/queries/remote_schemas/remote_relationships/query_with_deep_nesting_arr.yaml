@@ -3,37 +3,54 @@ url: /v1/graphql
 status: 200
 response:
   data:
-    address:
-      - address_line: "address-1"
-        myProfile:
-          id: 1
-          messagesNestedArgs:
-            - name: alice
-      - address_line: "address-2"
-        myProfile:
-          id: 2
-          messagesNestedArgs:
-            - name: bob
-      - address_line: "address-3"
-        myProfile:
-          id: 3
-          messagesNestedArgs:
-            - name: alice
-      - address_line: "address-1b"
-        myProfile:
-          id: 1
-          messagesNestedArgs:
-            - name: alice
+    articles:
+    - title: janes-novel-first-volume
+      author: &jane
+        alias: jane-the-great
+        user:
+          provider: provider1
+          profile:
+            name: Jane
+            userBasic:
+              id: 1
+              username: jane
+    - title: janes-novel-second-volume
+      author: *jane
+    - title: joes-first-series-of-stories
+      author: &joe
+        alias: awesome-joe
+        user:
+          provider: provider1
+          profile:
+            name: Joe
+            userBasic:
+              id: 3
+              username: joe
+    - title: joes-second-series-of-stories
+      author: *joe
+    - title: joes-third-series-of-stories
+      author: *joe
 query:
   query: |
-    query {
-      address {
-        address_line
-        myProfile {
-          id
-          messagesNestedArgs {
-            name
-          }   
+    query foo {
+      articles {
+        title
+        author {
+          alias
+          user {
+            provider
+            profile {
+              name
+              ...remote
+            }
+          }
         }
+      }
+    }
+
+    fragment remote on profiles {
+      userBasic {
+        id
+        username
       }
     }

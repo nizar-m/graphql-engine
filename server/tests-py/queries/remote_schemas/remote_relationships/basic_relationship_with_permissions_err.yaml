@@ -1,0 +1,25 @@
+description: GraphQL query with remote relationships; Permissions error on column internal
+url: /v1/graphql
+status: 200
+headers:
+  X-Hasura-Role: user
+  X-Hasura-User-Id: '1'
+response:
+  errors:
+  - extensions:
+      path: $.selectionSet.profiles.selectionSet.internal
+      code: validation-failed
+    message: "field \"internal\" not found in type: 'profiles'"
+query:
+  query: |
+    {
+      profiles(where: {id: {_eq: 2}}) {
+        id
+        name
+        internal
+        userBasic {
+          username
+          id
+        }
+      }
+    }

@@ -3,20 +3,24 @@ url: /v1/graphql
 status: 200
 headers:
   X-Hasura-Role: user
-  X-Hasura-User-Id: '1'
+  X-Hasura-User-Id: '2'
 response:
   data:
     profiles:
-      - id: 1
-        messageBasic:
-          name: alice
+    - id: 2
+      alias: john-the-stunner
+      userBasic:
+        username: john
+        id: 2
 query:
   query: |
-    query {
+    {
       profiles {
         id
-        messageBasic {
-          name
+        alias
+        userBasic {
+          username
+          id
         }
       }
     }

@@ -1,0 +1,43 @@
+description: Remote relationship GraphQL query with errors
+url: /v1/graphql
+status: 200
+response:
+  data:
+    authors_by_pk:
+      biography: Bio of Joe
+      user:
+        id: 3
+        provider: provider1
+        profile:
+          name: Joe
+          id: 3
+          usersNestedArgs:
+          - id: 3
+            provider: provider1
+            profile:
+              name: Joe
+              id: 3
+query:
+  query: |
+    {
+      authors_by_pk(id: 2){
+        biography
+        user {
+          id 
+          provider
+          profile {
+            name
+            id
+            # Remote relationship
+            usersNestedArgs {
+              id
+              provider
+              profile {
+                name
+                id
+              }
+            }
+          }
+        }
+      }
+    }

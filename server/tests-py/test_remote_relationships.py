@@ -5,6 +5,8 @@ import yaml
 
 from validate import check_query_f
 from test_schema_stitching import add_remote, delete_remote
+import time
+
 
 @pytest.fixture(scope='class')
 def remote_get_url(remote_gql_server):
@@ -192,7 +194,7 @@ class TestUpdateRemoteRelationship:
 
     remote_schemas = {
         'user' : '/user-graphql',
-        'message' : '/message-graphql',
+        'message' : '/messages-graphql',
         'prefixer-proxy': '/graphql-prefixer-proxy'
     }
 
@@ -248,8 +250,7 @@ class TestExecution:
                 'setup_remote_rel_multiple_fields.yaml',
                 'setup_remote_rel_nested_fields.yaml',
                 'setup_remote_rel_scalar.yaml',
-                'setup_remote_rel_with_errors.yaml'
-        ]:
+                'setup_remote_rel_with_errors.yaml' ]:
             validate_v1q_f(cf)
         yield
         delete_all_remote_relationships(hge_ctx)
@@ -259,12 +260,6 @@ class TestExecution:
     def test_basic_mixed(self, hge_ctx, transport):
         check_query_f(hge_ctx, self.dir() + 'basic_mixed.yaml', transport)
 
-    #@pytest.fixture(scope='function')
-    #def remote_rel_user_basic(validate_v1q_f):
-    #    validate_v1q_f('setup_remote_rel_basic.yaml')
-    #    yield
-    #    validate_v1q_f('delete_remote_rel.yaml')
-
     def test_basic_relationship(self, hge_ctx, transport):
         check_query_f(hge_ctx, self.dir() + 'basic_relationship.yaml', transport)
 
@@ -272,19 +267,8 @@ class TestExecution:
         check_query_f(hge_ctx, self.dir() + 'query_with_object_rel.yaml', transport)
 
 
-    # @pytest.fixture(scope='function')
-    # def remote_rel_nested_args(validate_v1q_f, hge_ctx):
-    #     validate_v1q_f('setup_remote_rel_nested_args.yaml')
-    #     yield
-    #     delete_remote_rel(hge_ctx, 'public','profiles','nestedArgs')
-
     def test_basic_relationship_on_object_with_arr_rel(self, hge_ctx, transport):
         check_query_f(hge_ctx, self.dir() + 'query_with_arr_rel.yaml', transport)
-
-    # def remote_rel_array(validate_v1q_f, hge_ctx):
-    #     validate_v1q_f('setup_remote_rel_array.yaml')
-    #     yield
-    #     delete_remote_rel(hge_ctx, 'public','profiles','usersNestedArr')
 
     def test_basic_array(self, hge_ctx, transport):
         check_query_f(hge_ctx, self.dir() + 'basic_array.yaml', transport)
@@ -340,65 +324,96 @@ class TestExecution:
     def test_with_scalar_relationship(self, hge_ctx, transport):
         check_query_f(hge_ctx, self.dir() + 'query_with_scalar_rel.yaml', transport)
 
+    def test_multiple_relationships_with_distinct_remotes(self, hge_ctx, transport):
+        check_query_f(hge_ctx, self.dir() + 'query_two_remote_rels_on_distinct_remotes.yaml', transport)
+
 
 @pytest.mark.parametrize("transport", ['http'])
 class TestDeepExecution:
+
+    remote_schemas = {
+        'user' : '/user-graphql',
+        'prefixer-proxy': '/graphql-prefixer-proxy'
+    }
 
     @classmethod
     def dir(cls):
         return "queries/remote_schemas/remote_relationships/"
 
-    @pytest.fixture(autouse=True)
-    def transact(self, hge_ctx, validate_v1q_f):
+    @pytest.fixture(autouse=True, scope='class')
+    def db_schema_and_data(self, validate_v1q_f):
         validate_v1q_f('setup.yaml')
         yield
         validate_v1q_f('teardown.yaml')
 
-    def test_with_deep_object(self, hge_ctx, transport):
-        st_code, resp = hge_ctx.v1q_f(self.dir() + 'setup_remote_rel_basic.yaml')
-        assert st_code == 200, resp
-        check_query_f(hge_ctx, self.dir() + 'query_with_deep_nesting_obj.yaml', transport)
+    @pytest.fixture(autouse=True, scope='class')
+    def remotes_and_rel(self, validate_v1q_f, hge_ctx, remote_get_url, db_schema_and_data):
+        for (schema, path) in self.remote_schemas.items():
+            add_remote(hge_ctx, schema, remote_get_url(path))
+        for cf in [
+                'setup_remote_rel_basic.yaml',
+                'setup_remote_rel_nested_args.yaml']:
+            validate_v1q_f(cf)
+        yield
+        delete_all_remote_relationships(hge_ctx)
+        for schema in self.remote_schemas:
+            delete_remote(hge_ctx, schema)
+
+    def test_with_hasura_deep_nested_object(self, hge_ctx, transport):
+        check_query_f(hge_ctx, self.dir() + 'query_with_hasura_deep_nesting_obj.yaml', transport)
+
+    def test_with_remote_deep_nested_object(self, hge_ctx, transport):
+        check_query_f(hge_ctx, self.dir() + 'query_with_remote_deep_nesting_obj.yaml', transport)
 
     def test_with_deep_array(self, hge_ctx, transport):
-        st_code, resp = hge_ctx.v1q_f(self.dir() + 'setup_remote_rel_nested_args.yaml')
-        assert st_code == 200, resp
         check_query_f(hge_ctx, self.dir() + 'query_with_deep_nesting_arr.yaml', transport)
 
-    def test_with_complex_path_object(self, hge_ctx, transport):
-        st_code, resp = hge_ctx.v1q_f(self.dir() + 'setup_remote_rel_basic.yaml')
-        assert st_code == 200, resp
-        check_query_f(hge_ctx, self.dir() + 'query_with_deep_nesting_complex_path_obj.yaml', transport)
-        check_query_f(hge_ctx, self.dir() + 'query_with_deep_nesting_complex_path_obj2.yaml', transport)
+    def test_with_deep_nesting_on_hasura_and_remote(self, hge_ctx, transport):
+        check_query_f(hge_ctx, self.dir() + 'query_with_deep_nesting_on_hasura_and_remote.yaml', transport)
 
-    def test_with_complex_path_array(self, hge_ctx, transport):
-        st_code, resp = hge_ctx.v1q_f(self.dir() + 'setup_remote_rel_basic.yaml')
-        assert st_code == 200, resp
+    def test_with_hasura_and_two_remotes_at_different_nesting_levels(self, hge_ctx, transport):
+        check_query_f(hge_ctx, self.dir() + 'query_with_hasura_and_two_remotes_at_different_nesting_levels.yaml', transport)
+
+    def test_with_complex_path_array_1(self, hge_ctx, transport):
         check_query_f(hge_ctx, self.dir() + 'query_with_deep_nesting_complex_path_arr.yaml', transport)
+
+    def test_with_complex_path_array_2(self, hge_ctx, transport):
         check_query_f(hge_ctx, self.dir() + 'query_with_deep_nesting_complex_path_arr2.yaml', transport)
 
 
 @pytest.mark.parametrize("transport", ['http'])
 class TestExecutionWithPermissions:
 
+    remote_schemas = {
+        'user' : '/user-graphql',
+        'prefixer-proxy': '/graphql-prefixer-proxy'
+    }
+
     @classmethod
     def dir(cls):
         return "queries/remote_schemas/remote_relationships/"
 
-    @pytest.fixture(autouse=True)
-    def transact(self, hge_ctx, graphql_service):
-        print("In setup method")
-        graphql_service.start()
-        try:
-            st_code, resp = hge_ctx.v1q_f(self.dir() + 'setup_with_permissions.yaml')
-            assert st_code == 200, resp
-            yield
-            st_code, resp = hge_ctx.v1q_f(self.dir() + 'teardown.yaml')
-            assert st_code == 200, resp
-        finally:
-            graphql_service.stop()
+    @pytest.fixture(autouse=True, scope='class')
+    def db_schema_and_data(self, validate_v1q_f):
+        validate_v1q_f('setup.yaml')
+        yield
+        validate_v1q_f('teardown.yaml')
+
+    @pytest.fixture(autouse=True, scope='class')
+    def remotes_and_rel(self, validate_v1q_f, hge_ctx, remote_get_url, db_schema_and_data):
+        for (schema, path) in self.remote_schemas.items():
+            add_remote(hge_ctx, schema, remote_get_url(path))
+        for cf in [
+                'setup_remote_rel_basic.yaml',
+                'setup_remote_rel_nested_args.yaml']:
+            validate_v1q_f(cf)
+        yield
+        delete_all_remote_relationships(hge_ctx)
+        for schema in self.remote_schemas:
+            delete_remote(hge_ctx, schema)
 
     def test_basic_relationship(self, hge_ctx, transport):
-        st_code, resp = hge_ctx.v1q_f(self.dir() + 'setup_remote_rel_basic.yaml')
-        assert st_code == 200, resp
-        check_query_f(hge_ctx, self.dir() + 'basic_relationship_with_permissions1.yaml', transport)
-        check_query_f(hge_ctx, self.dir() + 'basic_relationship_with_permissions2.yaml', transport)
+        check_query_f(hge_ctx, self.dir() + 'basic_relationship_with_permissions.yaml', transport)
+
+    def test_basic_relationship_err(self, hge_ctx, transport):
+        check_query_f(hge_ctx, self.dir() + 'basic_relationship_with_permissions_err.yaml', transport)

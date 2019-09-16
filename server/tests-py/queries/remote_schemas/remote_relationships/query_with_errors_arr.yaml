@@ -10,6 +10,7 @@ response:
       name: Jane
       returnArrError: &nullMsg
         - nullMessage: null
+        - nullMessage: null
     - id: 2
       name: John
       returnArrError: *nullMsg
@@ -17,18 +18,28 @@ response:
       name: Joe
       returnArrError: *nullMsg
   errors:
-  - locations:
-      - [1, 39]
+  - &errMsg1
+    locations:
+      - [1, 56]
     message: Intentional error on the field nullMessage
     path: [hasura_array_idx_0, 0, nullMessage]
-  - locations:
-      - [1, 96]
+  - <<: *errMsg1
+    path: [hasura_array_idx_0, 1, nullMessage]
+  - &errMsg2
+    locations:
+      - [1, 130]
     message: Intentional error on the field nullMessage
     path: [hasura_array_idx_1, 0, nullMessage]
-  - locations:
-      - [1, 153]
+  - <<: *errMsg2
+    path: [hasura_array_idx_1, 1, nullMessage]
+  - &errMsg3
+    locations:
+      - [1, 204]
     message: Intentional error on the field nullMessage
     path: [hasura_array_idx_2, 0, nullMessage]
+  - <<: *errMsg3
+    path: [hasura_array_idx_2, 1, nullMessage]
+
 query:
   query: |
     query {

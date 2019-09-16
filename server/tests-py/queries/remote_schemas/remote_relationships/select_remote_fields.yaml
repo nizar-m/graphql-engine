@@ -6,70 +6,58 @@ response:
     __type:
       name: profiles
       fields:
-      - name: alias
-        args: []
-      - name: id
-        args: []
-      - name: messages
-        args:
+      - args: []
+        name: alias
+      - args: []
+        name: id
+      - args:
+        - name: path
+          type:
+            name: String
+        name: internal
+      - args: &selectArgs
         - name: distinct_on
-          type:
-            name: null
+          type: &none
+            name:
         - name: limit
-          type:
+          type: &int
             name: Int
         - name: offset
-          type:
-            name: Int
+          type: *int
         - name: order_by
-          type:
-            name: null
+          type: *none
         - name: where
           type:
             name: messages_bool_exp
-      - name: messages_aggregate
-        args:
+        name: messages
+      - args: *selectArgs
+        name: messages_aggregate
+      - args: []
+        name: name
+      - args: []
+        name: user
+      - args:
+        - name: throwError
+          type:
+            name: Boolean
+        name: userBasic
+      - args:
         - name: distinct_on
-          type:
-            name: null
+          type: &none
+            name:
         - name: limit
-          type:
-            name: Int
+          type: *int
         - name: offset
-          type:
-            name: Int
+          type: *int
         - name: order_by
-          type:
-            name: null
+          type: *none
         - name: where
           type:
-            name: messages_bool_exp
-      - name: name
-        args: []
-      - name: nestedArgs
-        args:
-        - name: distinct_on
-          type:
-            name: null
-        - name: limit
-          type:
-            name: Int
-        - name: offset
-          type:
-            name: Int
-        - name: order_by
-          type:
-            name: null
-        - name: where
-          type:
-            name: users_bool_exp_remote_rel_public_profilesnestedArgs
-      - name: user
-        args: []
-      - name: userBasic
-        args: []
+            name: prefixer_proxy_users_bool_exp_remote_rel_public_profilesusersNestedArgs
+        name: usersNestedArgs
 query:
   query: |
-    query {
+    {
       __type(name: "profiles") {
         name
         fields {

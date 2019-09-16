@@ -9,7 +9,8 @@ args:
     remote_schema: error
     remote_field:
       objErr:
-        arguments: {}
+        arguments:
+          ignoredIdArg: $id
 - type: create_remote_relationship
   args:
     name: returnArrError
@@ -19,4 +20,5 @@ args:
     remote_schema: error
     remote_field:
       arrErr:
-        arguments: {}
+        arguments:
+          ignoredIdArg: $id

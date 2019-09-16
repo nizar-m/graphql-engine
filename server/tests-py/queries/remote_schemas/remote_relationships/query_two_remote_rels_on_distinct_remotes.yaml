@@ -1,0 +1,50 @@
+description: Query with two remote relationships pointing to two different remotes
+url: /v1/graphql
+status: 200
+response:
+  data:
+    profiles:
+    - usersNestedArgs:
+      - id: 1
+        provider: provider1
+      alias: jane-the-great
+      userBasic:
+        username: jane
+        id: 1
+    - usersNestedArgs:
+      - id: 2
+        provider: provider2
+      alias: john-the-stunner
+      userBasic:
+        username: john
+        id: 2
+    - usersNestedArgs:
+      - id: 3
+        provider: provider1
+      alias: awesome-joe
+      userBasic:
+        username: joe
+        id: 3
+query:
+  query: |
+    query foo {
+      profiles {
+        ...first_remote
+        alias
+        ...second_remote
+      }
+    }
+
+    fragment first_remote on profiles {
+      usersNestedArgs {
+        id
+        provider
+      }
+    }
+
+    fragment second_remote on profiles {
+      userBasic {
+        username
+        id
+      }
+    }
