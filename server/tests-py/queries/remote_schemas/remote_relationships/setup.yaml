@@ -143,7 +143,7 @@ args:
   args:
     role: user
     table:
-      name: profiles 
+      name: profiles
       schema: public
     permission:
       columns:
@@ -151,7 +151,24 @@ args:
       - name
       - id
       filter:
-        id: 
+        id:
+          _eq: X-Hasura-User-Id
+      limit: null
+      allow_aggregations: false
+
+#user2 do not have select permission on column id
+- type: create_select_permission
+  args:
+    role: user2
+    table:
+      name: profiles
+      schema: public
+    permission:
+      columns:
+      - alias
+      - name
+      filter:
+        id:
           _eq: X-Hasura-User-Id
       limit: null
       allow_aggregations: false

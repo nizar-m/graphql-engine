@@ -1,0 +1,20 @@
+description: Use the same input argument used in remote relationship definition
+url: /v1/graphql
+status: 200
+response:
+  errors:
+  - extensions:
+      path: $.selectionSet.profiles.selectionSet.userBasic.args.id
+      code: validation-failed
+    message: no such argument "id" is expected
+query:
+  query: |
+    {
+      profiles {
+        id
+        userBasic(id: 2) {
+          username
+          id
+        }
+      }
+    }

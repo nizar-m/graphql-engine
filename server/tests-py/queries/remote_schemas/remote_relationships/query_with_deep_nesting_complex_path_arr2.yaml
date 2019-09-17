@@ -1,0 +1,117 @@
+description: GraphQL query with complex deep nested path on remote array relationships
+url: /v1/graphql
+status: 200
+response:
+  data:
+    articles:
+    - title: janes-novel-first-volume
+      author: &janeTop
+        alias: jane-the-great
+        user:
+          id: 1
+          profile:
+            userBasic:
+              id: 1
+              username: jane
+        articles:
+        - title: janes-novel-first-volume
+          author: &janeSub
+            user_id: 1
+            user:
+              id: 1
+              profile:
+                alias: jane-the-great
+                usersNestedArgs:
+                - provider: provider1
+                  id: 1
+                  profile:
+                    messages:
+                    - id: 1
+                      message: (from table) You win
+        - title: janes-novel-second-volume
+          author: *janeSub
+    - title: janes-novel-second-volume
+      author: *janeTop
+    - title: joes-first-series-of-stories
+      author: &joeTop
+        alias: awesome-joe
+        user:
+          id: 3
+          profile:
+            userBasic:
+              id: 3
+              username: joe
+        articles:
+        - title: joes-first-series-of-stories
+          author: &joeSub
+            user_id: 3
+            user:
+              id: 3
+              profile:
+                alias: awesome-joe
+                usersNestedArgs:
+                - provider: provider1
+                  id: 3
+                  profile:
+                    messages: []
+        - title: joes-second-series-of-stories
+          author: *joeSub
+        - title: joes-third-series-of-stories
+          author: *joeSub
+    - title: joes-second-series-of-stories
+      author: *joeTop
+    - title: joes-third-series-of-stories
+      author: *joeTop
+query:
+  query: |
+    query articles {
+      articles {
+        title
+        author {
+          alias
+          user {
+            ...user_with_remote1
+          }
+          articles {
+            title
+            author {
+              user_id
+              user {
+                id
+                profile {
+                  alias
+                  ...remote2
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    fragment user_with_remote1 on users {
+      id
+      profile {
+        ...remote1
+      }
+    }
+
+    fragment remote1 on profiles {
+      userBasic {
+        id
+        username
+      }
+    }
+
+    fragment remote2 on profiles {
+      usersNestedArgs {
+        provider
+        id
+        profile {
+          messages {
+            id
+            message
+          }
+        }
+      }
+    }

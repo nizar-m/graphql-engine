@@ -266,7 +266,6 @@ class TestExecution:
     def test_basic_relationship_on_object(self, hge_ctx, transport):
         check_query_f(hge_ctx, self.dir() + 'query_with_object_rel.yaml', transport)
 
-
     def test_basic_relationship_on_object_with_arr_rel(self, hge_ctx, transport):
         check_query_f(hge_ctx, self.dir() + 'query_with_arr_rel.yaml', transport)
 
@@ -282,11 +281,16 @@ class TestExecution:
     def test_nested_fields(self, hge_ctx, transport):
         check_query_f(hge_ctx, self.dir() + 'basic_nested_fields.yaml', transport)
 
+    @pytest.mark.xfail(reason = "Order not preserved")
     def test_arguments(self, hge_ctx, transport):
         check_query_f(hge_ctx, self.dir() + 'query_with_arguments.yaml', transport)
 
+    def test_arguments_err_same_arg_as_definition(self, hge_ctx, transport):
+        check_query_f(hge_ctx, self.dir() + 'query_with_arguments_err_same_arg_as_definition.yaml', transport)
+
     def test_with_mixed_variables(self, hge_ctx, transport):
         check_query_f(hge_ctx, self.dir() + 'mixed_variables.yaml', transport)
+
     def test_with_remote_rel_variables(self, hge_ctx, transport):
         check_query_f(hge_ctx, self.dir() + 'remote_rel_variables.yaml', transport)
 

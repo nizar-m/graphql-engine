@@ -4,22 +4,38 @@ status: 200
 response:
   data:
     profiles:
+    - id: 1
+      user_output_1: &user1
       - id: 1
-        usersNestedArgs:
-          - id: 1
-            provider: provider1
+        provider: provider1
+      user_output_2: *user1
+      user_output_3: []
+    - id: 2
+      user_output_1: []
+      user_output_2: &user2
       - id: 2
-        usersNestedArgs: []
+        provider: provider2
+      user_output_3: *user2
+    - id: 3
+      user_output_1: &user3
       - id: 3
-        usersNestedArgs:
-          - id: 3
-            provider: provider1
+        provider: provider1
+      user_output_2: []
+      user_output_3: *user3
 query:
   query: |
-    query {
+    {
       profiles {
         id
-        usersNestedArgs(where: { provider: { _eq:  "provider1" } }) {
+        user_output_1: usersNestedArgs(where: {provider: {_eq: "provider1"}}) {
+          id
+          provider
+        }
+        user_output_2: usersNestedArgs(where: {_or: [{id: {_eq: 1}}, {provider: {_eq: "provider2"}}]}) {
+          id
+          provider
+        }
+        user_output_3: usersNestedArgs(where: {id: {_neq: 1}}) {
           id
           provider
         }

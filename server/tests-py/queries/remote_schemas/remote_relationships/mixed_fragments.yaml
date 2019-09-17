@@ -3,33 +3,43 @@ url: /v1/graphql
 status: 200
 response:
   data:
-    profiles:
-      - id: 1
-        alias: jane-the-great
-      - id: 2
-        alias: john-the-stunner
-      - id: 3
-        alias: awesome-joe
     allMessages:
-      - id: 1
-        msg: You win!
-      - id: 2
-        msg: You lose!
+    - id: 1
+      msg: You win!
+    - id: 2
+      msg: You lose!
+    profiles:
+    - id: 1
+      alias: jane-the-great
+      usersNestedArgs:
+      - provider: provider1
+        id: 1
+    - id: 2
+      alias: john-the-stunner
+      usersNestedArgs:
+      - provider: provider2
+        id: 2
 query:
   query: |
-    fragment basicInfo on Message {
+    fragment msg on Message {
       id
       msg
     }
 
-    query {
+    fragment remoteUser on profiles {
+      usersNestedArgs {
+        provider
+        id
+      }
+    }
 
-      profiles {
+    {
+      profiles(where: {id: {_lt: 3}}) {
         id
         alias
+        ...remoteUser
       }
-
       allMessages {
-        ...basicInfo
+        ...msg
       }
     }
