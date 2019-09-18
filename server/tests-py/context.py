@@ -10,18 +10,16 @@ import queue
 import socket
 import subprocess
 import time
-import uuid
 import string
 import random
 
-import yaml
 import requests
 import websocket
 from sqlalchemy import create_engine
 from sqlalchemy.schema import MetaData
 import graphql_server
 import graphql
-
+import yaml_utils
 
 class HGECtxError(Exception):
     pass
@@ -235,7 +233,7 @@ class HGECtx:
 
     def __init__(self, hge_url, pg_url, hge_key, hge_webhook, webhook_insecure,
                  hge_jwt_key_file, hge_jwt_conf, metadata_disabled,
-                 ws_read_cookie, hge_scale_url):
+                 ws_read_cookie, hge_scale_url, use_api_explorer):
 
         self.http = requests.Session()
         self.hge_key = hge_key
@@ -261,7 +259,7 @@ class HGECtx:
 
         self.ws_client = GQLWsClient(self, '/v1/graphql')
 
-        self.remote_gql_root_url = None
+        self.use_api_explorer = use_api_explorer
 
         result = subprocess.run(['../../scripts/get-version.sh'], shell=False, stdout=subprocess.PIPE, check=True)
         self.version = result.stdout.decode('utf-8').strip()
@@ -303,7 +301,8 @@ class HGECtx:
 
     def v1q_f(self, fn):
         with open(fn) as f:
-            return self.v1q(yaml.safe_load(f))
+            conf = yaml_utils.load(f)
+            return self.v1q(conf)
 
     def teardown(self):
         self.http.close()

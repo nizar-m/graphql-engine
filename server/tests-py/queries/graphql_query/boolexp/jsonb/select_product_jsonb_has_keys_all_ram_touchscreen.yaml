@@ -13,7 +13,7 @@ response:
         OS: os2
         Processor: processor2
         RAM: 16GB
-        Touchscreen: true
+        Touchscreen: 'yes'
     - id: 3
       category: Mobile
       name: mobile1
@@ -25,7 +25,7 @@ response:
         Network type: 4G
         Processor: processor2
         RAM: 3GB
-        Touchscreen: true
+        Touchscreen: 'yes'
 query:
   query: |
     query {

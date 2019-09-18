@@ -13,7 +13,7 @@ response:
     Sensors: Accelerometer sensor, E-compass, Proximity sensor
     Network type: 4G
     RAM: 3GB
-    Touchscreen: true
+    Touchscreen: 'yes'
 query:
   type: select
   args:

@@ -119,7 +119,7 @@ args:
         Disk: 128GB
         Weight: 1.2Kg
         Processor: processor2
-        Touchscreen: yes
+        Touchscreen: 'yes'
 
     - category: Mobile
       name: mobile1
@@ -131,7 +131,7 @@ args:
         Network type: 4G
         SIM type: DualSim
         Sensors: Accelerometer sensor, E-compass, Proximity sensor
-        Touchscreen: yes
+        Touchscreen: 'yes'
 
     - category: Electric kettle
       name: kettle1

@@ -22,7 +22,7 @@ response:
         Processor: processor2
         OS: os2
         RAM: 16GB
-        Touchscreen: true
+        Touchscreen: 'yes'
 query:
   query: |
     query {

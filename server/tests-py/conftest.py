@@ -82,6 +82,14 @@ def pytest_addoption(parser):
         help="Run testcases for logging"
     )
 
+    parser.addoption(
+        "--api-explorer",
+        action='store_true',
+        default=False,
+        required=False,
+        help="Run query on console using selenium"
+    )
+
 
 #By default,
 #1) Set default parallelism to one
@@ -110,6 +118,12 @@ def pytest_configure(config):
 
     random.seed(datetime.now())
 
+def pytest_collection_modifyitems(session, config, items):
+    fun_names = set()
+    for item in items:
+        fun_names.add(item.function.__name__)
+    assert not (config.getoption('--api-explorer') and len(fun_names) > 1), "--api-explorer option is only for running with a single test case"
+
 @pytest.hookimpl(optionalhook=True)
 def pytest_configure_node(node):
     for attr in ['hge_url', 'pg_url', 'remote_gql_port']:
@@ -135,18 +149,20 @@ def hge_ctx(request):
     ws_read_cookie = config.getoption('--test-ws-init-cookie')
     metadata_disabled = config.getoption('--test-metadata-disabled')
     hge_scale_url = config.getoption('--test-hge-scale-url')
+    use_api_explorer = config.getoption('--api-explorer')
     try:
         hge_ctx = HGECtx(
-            hge_url=hge_url,
-            pg_url=pg_url,
-            hge_key=hge_key,
-            hge_webhook=hge_webhook,
-            webhook_insecure=webhook_insecure,
-            hge_jwt_key_file=hge_jwt_key_file,
-            hge_jwt_conf=hge_jwt_conf,
-            ws_read_cookie=ws_read_cookie,
-            metadata_disabled=metadata_disabled,
-            hge_scale_url=hge_scale_url,
+            hge_url = hge_url,
+            pg_url = pg_url,
+            hge_key = hge_key,
+            hge_webhook = hge_webhook,
+            webhook_insecure = webhook_insecure,
+            hge_jwt_key_file = hge_jwt_key_file,
+            hge_jwt_conf = hge_jwt_conf,
+            ws_read_cookie = ws_read_cookie,
+            metadata_disabled = metadata_disabled,
+            hge_scale_url = hge_scale_url,
+            use_api_explorer = use_api_explorer
         )
     except HGECtxError as e:
         assert False, "Error from hge_cxt: " + str(e)
@@ -176,8 +192,7 @@ def evts_webhook(request):
     webhook_httpd = EvtsWebhookServer(server_address=('127.0.0.1', 5592))
     web_server = start_webserver(webhook_httpd)
     yield webhook_httpd
-    stop_webserver(webhook_httpd)
-    web_server.join()
+    stop_webserver(web_server)
 
 @pytest.fixture(scope='class')
 def ws_client(request, hge_ctx):

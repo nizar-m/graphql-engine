@@ -7,10 +7,11 @@ import base64
 import jsondiff
 import jwt
 import random
-import time
 import re
+import yaml_utils
 
 from context import GQLWsClient
+from run_with_selenium import run_query_on_selenium
 
 def check_keys(keys, obj):
     for k in keys:
@@ -70,9 +71,9 @@ def test_forbidden_when_admin_secret_reqd(hge_ctx, conf):
 
     headers = {}
     if 'headers' in conf:
-        headers = conf['headers']
+        headers = conf['headers'].copy()
 
-    # Test without admin secret
+        # Test without admin secret
     code, resp = hge_ctx.anyq(conf['url'], conf['query'], headers)
     #assert code in [401,404], "\n" + yaml.dump({
     assert code in status, "\n" + yaml.dump({
@@ -120,7 +121,7 @@ def test_forbidden_webhook(hge_ctx, conf):
 def check_query(hge_ctx, conf, transport='http', add_auth=True):
     headers = {}
     if 'headers' in conf:
-        headers = conf['headers']
+        headers = conf['headers'].copy()
 
     # No headers in conf => Admin role
     # Set the X-Hasura-Role header randomly
@@ -188,7 +189,6 @@ def check_query(hge_ctx, conf, transport='http', add_auth=True):
                                   conf['status'], conf.get('response'))
 
 
-
 def validate_gql_ws_q(hge_ctx, endpoint, query, headers, exp_http_response, retry=False):
     if endpoint == '/v1alpha1/graphql':
         ws_client = GQLWsClient(hge_ctx, '/v1alpha1/graphql')
@@ -217,6 +217,7 @@ def validate_gql_ws_q(hge_ctx, endpoint, query, headers, exp_http_response, retr
         assert resp['type'] == 'data', resp
 
     exp_ws_response = exp_http_response
+    exp_ws_response = json.loads(json.dumps(exp_ws_response))
 
     assert 'payload' in resp, resp
     assert resp['payload'] == exp_ws_response, yaml.dump({
@@ -235,6 +236,7 @@ def validate_http_anyq(hge_ctx, url, query, headers, exp_code, exp_response):
     assert code == exp_code, resp
     print('http resp: ', resp)
     if exp_response:
+        exp_response = json.loads(json.dumps(exp_response))
         assert json_ordered(resp) == json_ordered(exp_response), yaml.dump({
             'response': resp,
             'expected': exp_response,
@@ -242,32 +244,56 @@ def validate_http_anyq(hge_ctx, url, query, headers, exp_code, exp_response):
         })
     return resp
 
-path_matcher = re.compile(r'\$\{([^}^{]+)\}')
-
-def path_constructor(loader, node):
-  ''' Extract the matched value, expand env variable, and replace the match '''
-  value = node.value
-  match = path_matcher.match(value)
-  env_var = match.group()[2:-1]
-  return os.environ[env_var] + value[match.end():]
-
 def check_query_f(hge_ctx, f, transport='http', add_auth=True):
     print("Test file: " + f)
     hge_ctx.may_skip_test_teardown = False
+    modify_file = False
+    all_metaqs = []
     print ("transport="+transport)
-    with open(f) as c:
-        # The resolver and constructor defined below replaces the occurrence of ${ENV} in yaml with the value of the environmental variable ENV
-        yaml.add_implicit_resolver('!env', path_matcher, None, yaml.SafeLoader)
-        yaml.add_constructor('!env', path_constructor, yaml.SafeLoader)
-        conf = yaml.safe_load(c)
-        if isinstance(conf, list):
-            for sconf in conf:
-                check_query(hge_ctx, sconf, transport, add_auth)
+    try:
+        with open(f) as c:
+            # The resolver and constructor defined below replaces the occurrence of ${ENV} in yaml with the value of the environmental variable ENV
+            conf = yaml_utils.load(c)
+    except FileNotFoundError:
+        if transport == 'http' and hge_ctx.use_api_explorer:
+            conf = {
+                'url': '/v1/graphql',
+                'status': 200
+            }
         else:
-            if conf['status'] != 200:
-                hge_ctx.may_skip_test_teardown = True
-            check_query(hge_ctx, conf, transport, add_auth)
+            raise
 
+    if isinstance(conf, list):
+        for (i, sconf) in enumerate(conf):
+            enable_explorer = is_explorer_mode(sconf, hge_ctx, transport)
+            if enable_explorer:
+                (metaqs, sconf) = mod_conf_with_explorer(sconf, hge_ctx, transport)
+                all_metaqs.extend(metaqs)
+                modify_file = True
+                conf[i] = sconf
+            check_query(hge_ctx, sconf, transport, add_auth)
+    else:
+        enable_explorer = is_explorer_mode(conf, hge_ctx, transport)
+        if enable_explorer:
+            modify_file = True
+            (metaqs, conf) = mod_conf_with_explorer(conf, hge_ctx, transport)
+            all_metaqs.extend(metaqs)
+        if conf['status'] != 200:
+            hge_ctx.may_skip_test_teardown = True
+        check_query(hge_ctx, conf, transport, add_auth)
+
+    if modify_file:
+        if all_metaqs:
+            print(yaml_utils.dump(all_metaqs))
+            assert False, "The metadata operations below maybe needed for tests to work"
+        with open(f,'w') as c:
+            yaml_utils.dump(conf, c)
+
+def is_explorer_mode(conf, hge_ctx, transport):
+    return transport == 'http' and hge_ctx.use_api_explorer and conf['url'].endswith('/graphql')
+
+def mod_conf_with_explorer(conf, hge_ctx, transport):
+    return run_query_on_selenium(hge_ctx, conf)
 
 def json_ordered(obj):
     if isinstance(obj, dict):

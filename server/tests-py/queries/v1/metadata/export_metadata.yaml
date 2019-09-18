@@ -31,6 +31,7 @@ response:
     delete_permissions: []
     event_triggers: []
   query_collections: []
+  remote_relationships: []
   allowlist: []
   functions:
   - search_articles
