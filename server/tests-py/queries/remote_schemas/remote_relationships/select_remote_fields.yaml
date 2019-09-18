@@ -43,8 +43,7 @@ response:
         name: userBasic
       - args:
         - name: distinct_on
-          type: &none
-            name:
+          type: *none
         - name: limit
           type: *int
         - name: offset

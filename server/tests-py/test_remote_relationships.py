@@ -257,6 +257,7 @@ class TestExecution:
         for schema in self.remote_schemas:
             delete_remote(hge_ctx, schema)
 
+    # TODO "Order not preserved"
     def test_basic_mixed(self, hge_ctx, transport):
         check_query_f(hge_ctx, self.dir() + 'basic_mixed.yaml', transport)
 
@@ -281,7 +282,7 @@ class TestExecution:
     def test_nested_fields(self, hge_ctx, transport):
         check_query_f(hge_ctx, self.dir() + 'basic_nested_fields.yaml', transport)
 
-    @pytest.mark.xfail(reason = "Order not preserved")
+    # TODO "Order not preserved"
     def test_arguments(self, hge_ctx, transport):
         check_query_f(hge_ctx, self.dir() + 'query_with_arguments.yaml', transport)
 

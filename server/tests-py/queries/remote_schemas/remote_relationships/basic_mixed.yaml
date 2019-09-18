@@ -4,25 +4,37 @@ status: 200
 response:
   data:
     table:
-      - id: 1
-      - id: 2
-      - id: 3
-    remote:
-      - id: 1
-        msg: You win!
-      - id: 2
-        msg: You lose!
+    - id: 1
+      alias: jane-the-great
+    - id: 2
+      alias: john-the-stunner
+    - id: 3
+      alias: awesome-joe
+    remote_1:
+    - id: 1
+      msg: You win!
+    - id: 2
+      msg: You lose!
+    remote_2:
+    - username: jane
+      id: 1
+    - username: john
+      id: 2
+    - username: joe
+      id: 3
 query:
   query: |
-    query {
-
+    {
       table: profiles {
         id
+        alias
       }
-
-      remote: allMessages {
+      remote_1: allMessages {
         id
         msg
       }
-
+      remote_2: allUsers {
+        username
+        id
+      }
     }

@@ -4,24 +4,27 @@ status: 200
 response:
   data:
     profiles:
-      - id: 1
-        alias: jane-the-great
-        userBasic:
-          id: 1
-          username: jane
-      - id: 2
-        alias: john-the-stunner
-        userBasic:
-          id: 2 
-          username: john
-      - id: 3
-        alias: awesome-joe
-        userBasic:
-          id: 3
-          username: joe
+    - id: 1
+      alias: jane-the-great
+      userBasic:
+        id: 1
+        username: jane
+      captitalizeAlias: Jane-the-great
+    - id: 2
+      alias: john-the-stunner
+      userBasic:
+        id: 2
+        username: john
+      captitalizeAlias: John-the-stunner
+    - id: 3
+      alias: awesome-joe
+      userBasic:
+        id: 3
+        username: joe
+      captitalizeAlias: Awesome-joe
 query:
   query: |
-    query {
+    {
       profiles {
         id
         alias
@@ -29,5 +32,6 @@ query:
           id
           username
         }
+        captitalizeAlias: userScalar
       }
     }

@@ -4,20 +4,20 @@ status: 200
 response:
   data:
     messages:
-      - id: 1
-        message: (from table) You win
-        usersNestedArr: []
-      - id: 2
-        message: (from table) You lose
-        usersNestedArr:
-          - provider: provider2
+    - id: 1
+      message: (from table) You win
+      usersNestedArr: []
+    - id: 2
+      message: (from table) You lose
+      usersNestedArr:
+      - provider: provider2
 query:
   query: |
-    query {
+    {
       messages {
         id
         message
-        usersNestedArr(where : { provider: { _eq: "provider2" } } ){
+        usersNestedArr(where: {provider: {_eq: "provider2"}}) {
           provider
         }
       }
