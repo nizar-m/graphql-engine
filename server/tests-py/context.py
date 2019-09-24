@@ -22,6 +22,8 @@ from sqlalchemy.schema import MetaData
 import graphql_server
 import graphql
 
+from metadata_utils import *
+
 
 class HGECtxError(Exception):
     pass
@@ -301,6 +303,12 @@ class HGECtx:
     def v1q_f(self, fn):
         with open(fn) as f:
             return self.v1q(yaml.safe_load(f))
+
+    def set_v1q_fns(self):
+        for fn in [run_sql_q, delete_table_q, track_table_q, untrack_table_q, create_obj_fk_rel_q, create_obj_manual_rel_q, create_arr_fk_rel_q, create_arr_manual_rel_q, create_ins_perm_q, create_sel_perm_q, create_upd_perm_q, create_del_perm_q, drop_ins_perm_q, drop_sel_perm_q, drop_upd_perm_q, drop_del_perm_q, add_remote_q, delete_remote_q]:
+            attr_name = fn.__name__[:-2]
+            # Set all the metadata functions in v1q
+            setattr(self, attr_name, mk_v1q_fn(fn, self))
 
     def teardown(self):
         self.http.close()

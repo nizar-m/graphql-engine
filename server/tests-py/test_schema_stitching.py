@@ -8,56 +8,20 @@ import queue
 import requests
 import time
 
+from metadata_utils import add_remote_q, reload_remote_q, delete_remote_q
+
 import pytest
 
 from validate import check_query_f, check_query
 
-
-def mk_add_remote_q(name, url, headers=None, client_hdrs=False, timeout=None):
-    return {
-        "type": "add_remote_schema",
-        "args": {
-            "name": name,
-            "comment": "testing " + name,
-            "definition": {
-                "url": url,
-                "headers": headers,
-                "forward_client_headers": client_hdrs,
-                "timeout_seconds": timeout
-            }
-        }
-    }
-
-def mk_delete_remote_q(name):
-    return {
-        "type" : "remove_remote_schema",
-        "args" : {
-            "name": name
-        }
-    }
-
-def mk_reload_remote_q(name):
-    return {
-        "type" : "reload_remote_schema",
-        "args" : {
-            "name" : name
-        }
-    }
-
-
 class TestRemoteSchemaBasic:
     """ basic => no hasura tables are tracked """
 
-    teardown = {"type": "clear_metadata", "args": {}}
     dir = 'queries/remote_schemas'
 
     @pytest.fixture(autouse=True)
-    def transact(self, hge_ctx):
-        q = mk_add_remote_q('simple 1', 'http://localhost:5000/hello-graphql')
-        st_code, resp = hge_ctx.v1q(q)
-        assert st_code == 200, resp
-        yield
-        hge_ctx.v1q(self.teardown)
+    def transact(self, setup_remote):
+        yield from setup_remote('simple 1', 'http://localhost:5000/hello-graphql')
 
     def test_add_schema(self, hge_ctx):
         """ check if the remote schema is added in the db """
@@ -87,21 +51,21 @@ class TestRemoteSchemaBasic:
 
     def test_add_schema_conflicts(self, hge_ctx):
         """add 2 remote schemas with same node or types"""
-        q = mk_add_remote_q('simple 2', 'http://localhost:5000/hello-graphql')
+        q = add_remote_q('simple 2', 'http://localhost:5000/hello-graphql')
         st_code, resp = hge_ctx.v1q(q)
         assert st_code == 400
         assert resp['code'] == 'remote-schema-conflicts'
 
     def test_remove_schema_error(self, hge_ctx):
         """remove remote schema which is not added"""
-        q = mk_delete_remote_q('random name')
+        q = delete_remote_q('random name')
         st_code, resp = hge_ctx.v1q(q)
         assert st_code == 400
         assert resp['code'] == 'not-exists'
 
     def test_reload_remote_schema(self, hge_ctx):
         """reload a remote schema"""
-        q = mk_reload_remote_q('simple 1')
+        q = reload_remote_q('simple 1')
         st_code, resp = hge_ctx.v1q(q)
         assert st_code == 200
 
@@ -110,8 +74,7 @@ class TestRemoteSchemaBasic:
         q = mk_add_remote_q('my remote', 'http://localhost:5000/user-graphql')
         st_code, resp = hge_ctx.v1q(q)
         assert st_code == 200, resp
-        st_code, resp = hge_ctx.v1q(mk_delete_remote_q('my remote'))
-        assert st_code == 200, resp
+        hge_ctx.delete_remote('my remote')
 
     def test_add_remote_schema_with_interfaces(self, hge_ctx):
         """add a remote schema with interfaces in it"""
@@ -119,8 +82,7 @@ class TestRemoteSchemaBasic:
         st_code, resp = hge_ctx.v1q(q)
         assert st_code == 200, resp
         check_query_f(hge_ctx, self.dir + '/character_interface_query.yaml')
-        st_code, resp = hge_ctx.v1q(mk_delete_remote_q('my remote interface one'))
-        assert st_code == 200, resp
+        hge_ctx.delete_remote('my remote interface one')
 
     def test_add_remote_schema_with_interface_err_empty_fields_list(self, hge_ctx):
         """add a remote schema with an interface having no fields"""
@@ -382,12 +344,8 @@ class TestRemoteSchemaResponseHeaders():
     dir = 'queries/remote_schemas'
 
     @pytest.fixture(autouse=True)
-    def transact(self, hge_ctx):
-        q = mk_add_remote_q('sample-auth', 'http://localhost:5000/auth-graphql')
-        st_code, resp = hge_ctx.v1q(q)
-        assert st_code == 200, resp
-        yield
-        hge_ctx.v1q(self.teardown)
+    def sample_auth_remote(self, setup_remote):
+        yield from setup_remote('sample-auth', 'http://localhost:5000/auth-graphql')
 
     def test_response_headers_from_remote(self, hge_ctx):
         headers = {}
@@ -408,12 +366,8 @@ class TestAddRemoteSchemaCompareRootQueryFields:
     remote = 'http://localhost:5000/default-value-echo-graphql'
 
     @pytest.fixture(autouse=True)
-    def transact(self, hge_ctx):
-        st_code, resp = hge_ctx.v1q(mk_add_remote_q('default_value_test', self.remote))
-        assert st_code == 200, resp
-        yield
-        st_code, resp = hge_ctx.v1q(mk_delete_remote_q('default_value_test'))
-        assert st_code == 200, resp
+    def default_value_test_remote(self, setup_remote):
+        yield from setup_remote('default_value_test', self.remote)
 
     def test_schema_check_arg_default_values_and_field_and_arg_types(self, hge_ctx):
         with open('queries/graphql_introspection/introspection.yaml') as f:
@@ -441,12 +395,8 @@ class TestRemoteSchemaTimeout:
     teardown = {"type": "clear_metadata", "args": {}}
 
     @pytest.fixture(autouse=True)
-    def transact(self, hge_ctx):
-        q = mk_add_remote_q('simple 1', 'http://localhost:5000/hello-graphql', timeout = 5)
-        st_code, resp = hge_ctx.v1q(q)
-        assert st_code == 200, resp
-        yield
-        hge_ctx.v1q(self.teardown)
+    def transact(self, setup_remote):
+        yield from setup_remote('simple 1', 'http://localhost:5000/hello-graphql', timeout = 5)
 
     def test_remote_query_timeout(self, hge_ctx):
         check_query_f(hge_ctx, self.dir + '/basic_timeout_query.yaml')

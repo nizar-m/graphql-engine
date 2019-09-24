@@ -7,6 +7,9 @@ from datetime import datetime
 import sys
 import os
 
+#import metadata fixtures
+from metadata_utils import run_sql, delete_table, track_table, untrack_table, create_obj_fk_rel, create_obj_manual_rel, create_arr_fk_rel, create_arr_manual_rel, create_ins_perm, create_sel_perm, create_upd_perm, create_del_perm, drop_ins_perm, drop_sel_perm, drop_upd_perm, drop_del_perm, add_remote, setup_remote, delete_remote
+
 def pytest_addoption(parser):
     parser.addoption(
         "--hge-urls",
